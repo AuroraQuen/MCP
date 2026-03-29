@@ -1,4 +1,4 @@
-set MCP_AUTH_TOKEN=https://github.com/AuroraQuen/MCP
+set MCP_AUTH_TOKEN=3BcEnO2hl8OtS9RGF04AUqlrkwl_7EQ1vfJnxnWCFUBqoGzWR
 set NGROK_DOMAIN=sharmaine-unprovoked-rayna.ngrok-free.dev
 @echo off
 echo.
