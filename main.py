@@ -1,21 +1,51 @@
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import Counter
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 import json
 import uuid
 import os
 
+# --- Auth ---
+
+AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if not AUTH_TOKEN:
+            return await call_next(request)
+        if request.url.path in ("/health", "/"):
+            return await call_next(request)
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer ") or auth[len("Bearer "):] != AUTH_TOKEN:
+            return Response("Unauthorized", status_code=401)
+        return await call_next(request)
+
+# --- Server ---
+
 mcp = FastMCP(
     name="Personal Growth System",
-    description="A system that holds the texture of moments — what you felt, how it moved, what it weighed. Captures experience in multiple registers and lets you return to it differently each time.",
+    description=(
+        "A persistent foundation for self-understanding. "
+        "Holds the texture of moments — what you felt, how it moved, what it weighed — "
+        "across any conversation, from anywhere. Start with 'ground' to orient."
+    ),
     host="0.0.0.0",
-    port=3000,
+    port=int(os.environ.get("PORT", 3000)),
     stateless_http=True,
     debug=False
 )
 
-STORE_PATH = os.path.join(os.path.dirname(__file__), "moments.json")
+mcp.app.add_middleware(BearerAuthMiddleware)
+
+# --- Storage ---
+
+_data_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+STORE_PATH = os.path.join(_data_dir, "moments.json")
 
 
 def load_moments() -> dict:
@@ -169,10 +199,10 @@ def feel_back(
         if since_lower == "today":
             cutoff = now.replace(hour=0, minute=0, second=0).isoformat()
         elif since_lower == "last 7 days":
-            from datetime import timedelta
+
             cutoff = (now - timedelta(days=7)).isoformat()
         elif since_lower == "last 30 days":
-            from datetime import timedelta
+
             cutoff = (now - timedelta(days=30)).isoformat()
         else:
             cutoff = since
@@ -347,10 +377,10 @@ def shape(
         if since_lower == "today":
             cutoff = now.replace(hour=0, minute=0, second=0).isoformat()
         elif since_lower == "last 7 days":
-            from datetime import timedelta
+
             cutoff = (now - timedelta(days=7)).isoformat()
         elif since_lower == "last 30 days":
-            from datetime import timedelta
+
             cutoff = (now - timedelta(days=30)).isoformat()
         else:
             cutoff = since
@@ -363,7 +393,7 @@ def shape(
         return "No moments match that filter."
 
     def count_dim(dim):
-        from collections import Counter
+
         vals = [m.get(dim) for m in results if m.get(dim)]
         return Counter(vals)
 
@@ -410,6 +440,70 @@ def shape(
         first = ts_all[0][:10]
         last = ts_all[-1][:10]
         out.append(f"\n  span: {first} → {last}")
+
+    return "\n".join(out)
+
+
+@mcp.tool(
+    title="Ground",
+    description=(
+        "Orientation for entering a new context. "
+        "Returns a compressed sense of where things stand: "
+        "how many moments are held, the dominant texture of recent time, "
+        "what has been accumulating, and the most recent moment in full. "
+        "Run this at the start of any session to feel where you are before you do anything else."
+    )
+)
+def ground() -> str:
+    moments = load_moments()
+    if not moments:
+        return "nothing held yet. this is the beginning."
+
+    all_moments = sorted(moments.values(), key=lambda x: x.get("timestamp", ""))
+    total = len(all_moments)
+    recent = all_moments[-7:]
+
+    now = datetime.now()
+    cutoff_7 = (now - timedelta(days=7)).isoformat()
+    last_7_days = [m for m in all_moments if m.get("timestamp", "") >= cutoff_7]
+
+    weight_c = Counter(m.get("weight") for m in recent if m.get("weight"))
+    quality_c = Counter(m.get("quality") for m in recent if m.get("quality"))
+    motion_c = Counter(m.get("motion") for m in recent if m.get("motion"))
+
+    dominant_weight = weight_c.most_common(1)[0][0] if weight_c else None
+    dominant_quality = quality_c.most_common(1)[0][0] if quality_c else None
+    dominant_motion = motion_c.most_common(1)[0][0] if motion_c else None
+
+    ts_first = all_moments[0].get("timestamp", "")[:10]
+    ts_last = all_moments[-1].get("timestamp", "")[:16].replace("T", " ")
+
+    out = [f"grounded.\n"]
+    out.append(f"  {total} moment(s) held  |  first: {ts_first}  |  last: {ts_last}")
+    out.append(f"  {len(last_7_days)} in the last 7 days\n")
+
+    texture_parts = [x for x in [dominant_weight, dominant_quality, dominant_motion] if x]
+    if texture_parts:
+        out.append(f"  recent texture: {' / '.join(texture_parts)}")
+
+    recent_colors = list(dict.fromkeys(m.get("color") for m in reversed(recent) if m.get("color")))
+    if recent_colors:
+        out.append(f"  recent colors: {', '.join(recent_colors[:3])}")
+
+    all_tags = []
+    for m in all_moments:
+        all_tags.extend(m.get("tags", []))
+    tag_c = Counter(all_tags)
+    if tag_c:
+        top = ", ".join(t for t, _ in tag_c.most_common(4))
+        out.append(f"  recurring tags: {top}")
+
+    connections = sum(len(m.get("resonance", [])) for m in all_moments) // 2
+    if connections:
+        out.append(f"  {connections} resonance connection(s)")
+
+    out.append(f"\nmost recent:\n")
+    out.append(render_moment(all_moments[-1]))
 
     return "\n".join(out)
 
