@@ -32,5 +32,5 @@ Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Edit start.ps1 — set MCP_AUTH_TOKEN and NGROK_DOMAIN"
 Write-Host "  2. Run .\start.ps1 to test"
-Write-Host "  3. Follow the Task Scheduler instructions in start.ps1 to run on boot."
+Write-Host "  3. Follow the Task Scheduler instructions in start.ps1 to run on boot.".
 Write-Host ""
