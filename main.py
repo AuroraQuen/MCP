@@ -504,11 +504,15 @@ def ground() -> str:
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
-    mcp.run(
-        transport="http",
-        host="0.0.0.0",
-        port=port,
-        stateless_http=True,
-        middleware=[Middleware(BearerAuthMiddleware)],
-    )
+    transport = os.environ.get("MCP_TRANSPORT", "http")
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+    else:
+        port = int(os.environ.get("PORT", 3000))
+        mcp.run(
+            transport="http",
+            host="0.0.0.0",
+            port=port,
+            stateless_http=True,
+            middleware=[Middleware(BearerAuthMiddleware)],
+        )
