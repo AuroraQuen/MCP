@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir "mcp[cli]" fastmcp pydantic starlette
+RUN pip install --no-cache-dir fastmcp pydantic starlette
 
 COPY main.py .
 

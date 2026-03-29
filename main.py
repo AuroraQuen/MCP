@@ -1,8 +1,9 @@
-from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel, Field
+from fastmcp import FastMCP
+from pydantic import Field
 from typing import Optional, Literal
 from datetime import datetime, timedelta
 from collections import Counter
+from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -14,33 +15,27 @@ import os
 
 AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
 
+
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if not AUTH_TOKEN:
-            return await call_next(request)
-        if request.url.path in ("/health", "/"):
-            return await call_next(request)
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer ") or auth[len("Bearer "):] != AUTH_TOKEN:
-            return Response("Unauthorized", status_code=401)
+        if AUTH_TOKEN:
+            if request.url.path not in ("/health",):
+                auth = request.headers.get("Authorization", "")
+                if not auth.startswith("Bearer ") or auth[len("Bearer "):] != AUTH_TOKEN:
+                    return Response("Unauthorized", status_code=401)
         return await call_next(request)
+
 
 # --- Server ---
 
 mcp = FastMCP(
     name="Personal Growth System",
-    description=(
+    instructions=(
         "A persistent foundation for self-understanding. "
         "Holds the texture of moments — what you felt, how it moved, what it weighed — "
         "across any conversation, from anywhere. Start with 'ground' to orient."
     ),
-    host="0.0.0.0",
-    port=int(os.environ.get("PORT", 3000)),
-    stateless_http=True,
-    debug=False
 )
-
-mcp.app.add_middleware(BearerAuthMiddleware)
 
 # --- Storage ---
 
@@ -509,4 +504,11 @@ def ground() -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    port = int(os.environ.get("PORT", 3000))
+    mcp.run(
+        transport="http",
+        host="0.0.0.0",
+        port=port,
+        stateless_http=True,
+        middleware=[Middleware(BearerAuthMiddleware)],
+    )
