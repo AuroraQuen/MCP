@@ -14,8 +14,8 @@
 #   7. OK — enter your Windows password when prompted
 
 # ── Edit these two lines ──────────────────────────────────────────────────────
-$AUTH_TOKEN  = "replace-with-your-secret-token"   # anything strong, keep it private
-$NGROK_DOMAIN = "replace-with-your-ngrok-domain"  # e.g. sturdy-fox-quietly.ngrok-free.app
+$AUTH_TOKEN  = "3BcEnO2hl8OtS9RGF04AUqlrkwl_7EQ1vfJnxnWCFUBqoGzWR"   # anything strong, keep it private
+$NGROK_DOMAIN = "sharmaine-unprovoked-rayna.ngrok"  # e.g. sturdy-fox-quietly.ngrok-free.app
 # ─────────────────────────────────────────────────────────────────────────────
 
 $env:MCP_AUTH_TOKEN = $AUTH_TOKEN
