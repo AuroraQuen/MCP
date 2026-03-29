@@ -1,3 +1,5 @@
+set MCP_AUTH_TOKEN=https://github.com/AuroraQuen/MCP
+set NGROK_DOMAIN=sharmaine-unprovoked-rayna.ngrok-free.dev
 @echo off
 echo.
 echo Installing Python dependencies...
