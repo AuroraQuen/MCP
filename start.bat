@@ -2,8 +2,8 @@
 
 rem =========================================================
 rem  Edit these two lines before running
-set MCP_AUTH_TOKEN=replace-with-your-secret-token
-set NGROK_DOMAIN=replace-with-your-ngrok-domain.ngrok-free.app
+set MCP_AUTH_TOKEN=3BcEnO2hl8OtS9RGF04AUqlrkwl_7EQ1vfJnxnWCFUBqoGzWR
+set NGROK_DOMAIN=https://sharmaine-unprovoked-rayna.ngrok-free.dev/mcp
 rem =========================================================
 
 set DATA_DIR=%USERPROFILE%\personal-growth-data
