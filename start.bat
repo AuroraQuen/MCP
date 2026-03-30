@@ -1,28 +1,28 @@
 @echo off
- 
+
 rem =========================================================
 rem  Edit these two lines before running
 set MCP_AUTH_TOKEN=replace-with-your-secret-token
 set NGROK_DOMAIN=replace-with-your-ngrok-domain.ngrok-free.app
 rem =========================================================
- 
+
 set DATA_DIR=%USERPROFILE%\personal-growth-data
 set PORT=3000
- 
+
 if not exist "%DATA_DIR%" mkdir "%DATA_DIR%"
 if not exist "%DATA_DIR%\logs" mkdir "%DATA_DIR%\logs"
- 
+
 echo Stopping any previous instances...
 taskkill /f /im ngrok.exe >nul 2>&1
- 
+
 echo Starting MCP server...
 start /min "" python "%~dp0main.py" >> "%DATA_DIR%\logs\server.log" 2>&1
- 
+
 timeout /t 2 /nobreak >nul
- 
+
 echo Starting ngrok tunnel...
 start /min "" ngrok http --domain=%NGROK_DOMAIN% %PORT% --log stdout >> "%DATA_DIR%\logs\ngrok.log" 2>&1
- 
+
 echo.
 echo Running.
 echo.
@@ -34,4 +34,3 @@ echo Add to Claude as MCP server:
 echo   URL    : https://%NGROK_DOMAIN%/mcp
 echo   Header : Authorization: Bearer %MCP_AUTH_TOKEN%
 echo.
- 

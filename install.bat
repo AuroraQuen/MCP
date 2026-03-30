@@ -1,5 +1,3 @@
-set MCP_AUTH_TOKEN=3BcEnO2hl8OtS9RGF04AUqlrkwl_7EQ1vfJnxnWCFUBqoGzWR
-set NGROK_DOMAIN=sharmaine-unprovoked-rayna.ngrok-free.dev
 @echo off
 echo.
 echo Installing Python dependencies...
@@ -9,12 +7,12 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
- 
+
 echo.
 echo Creating data directory...
 if not exist "%USERPROFILE%\personal-growth-data" mkdir "%USERPROFILE%\personal-growth-data"
 echo Data will be stored at: %USERPROFILE%\personal-growth-data
- 
+
 echo.
 echo Done. Next steps:
 echo   1. Edit start.bat -- set your token and ngrok domain
@@ -22,4 +20,3 @@ echo   2. Double-click start.bat to test
 echo   3. Add start.bat to Task Scheduler to run on login
 echo.
 pause
- 
