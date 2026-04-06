@@ -42,6 +42,51 @@ mcp = FastMCP(
 _data_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
 STORE_PATH = os.path.join(_data_dir, "moments.json")
 
+# --- Embedding ---
+
+_embedder = None
+_chroma_collection = None
+
+def _moment_to_text(m: dict) -> str:
+    parts = []
+    if m.get("text"):
+        parts.append(m["text"])
+    if m.get("color"):
+        parts.append(f"color: {m['color']}")
+    for field in ("weight", "pace", "quality", "motion", "sound"):
+        if m.get(field):
+            parts.append(f"{field}: {m[field]}")
+    if m.get("tags"):
+        parts.append(f"tags: {' '.join(m['tags'])}")
+    return " | ".join(parts) if parts else "moment"
+
+def get_embedder():
+    global _embedder
+    if _embedder is None:
+        from sentence_transformers import SentenceTransformer
+        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embedder
+
+def get_collection():
+    global _chroma_collection
+    if _chroma_collection is None:
+        import chromadb
+        chroma_path = os.path.join(_data_dir, "chroma")
+        client = chromadb.PersistentClient(path=chroma_path)
+        _chroma_collection = client.get_or_create_collection("moments")
+    return _chroma_collection
+
+def embed_moment(moment: dict):
+    text = _moment_to_text(moment)
+    embedder = get_embedder()
+    collection = get_collection()
+    embedding = embedder.encode(text).tolist()
+    collection.upsert(
+        ids=[moment["id"]],
+        embeddings=[embedding],
+        documents=[text],
+    )
+
 
 def load_moments() -> dict:
     if not os.path.exists(STORE_PATH):
@@ -155,6 +200,10 @@ def capture(
     moment = {k: v for k, v in moment.items() if v is not None or k in ("id", "timestamp", "tags", "resonance")}
     moments[moment_id] = moment
     save_moments(moments)
+    try:
+        embed_moment(moment)
+    except Exception:
+        pass
     return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
 
 
@@ -310,38 +359,56 @@ def connect(
 )
 def find_resonance(
     moment_id: str = Field(..., description="ID of the moment to find resonance for"),
-    min_overlap: int = Field(2, description="Minimum number of shared texture dimensions (1-3)")
+    n: int = Field(5, description="How many resonant moments to return (default 5)")
 ) -> str:
     moments = load_moments()
     if moment_id not in moments:
         return f"Moment '{moment_id}' not found."
+    if len(moments) < 2:
+        return "Not enough moments held yet to find resonance."
 
     source = moments[moment_id]
-    texture_dims = ["weight", "quality", "motion"]
-    source_vals = {d: source.get(d) for d in texture_dims if source.get(d)}
 
-    if not source_vals:
-        return "Source moment has no texture dimensions to match against."
-
-    matches = []
-    for mid, m in moments.items():
-        if mid == moment_id:
-            continue
-        overlap = sum(1 for d, v in source_vals.items() if m.get(d) == v)
-        if overlap >= min_overlap:
-            matches.append((overlap, m))
-
-    matches.sort(key=lambda x: x[0], reverse=True)
+    try:
+        collection = get_collection()
+        source_text = _moment_to_text(source)
+        embedder = get_embedder()
+        query_embedding = embedder.encode(source_text).tolist()
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=min(n + 1, len(moments)),
+        )
+        ids = results["ids"][0]
+        distances = results["distances"][0]
+        matches = [
+            (moments[mid], dist)
+            for mid, dist in zip(ids, distances)
+            if mid != moment_id and mid in moments
+        ][:n]
+    except Exception:
+        # fall back to field overlap if embeddings unavailable
+        texture_dims = ["weight", "quality", "motion"]
+        source_vals = {d: source.get(d) for d in texture_dims if source.get(d)}
+        fallback = []
+        for mid, m in moments.items():
+            if mid == moment_id:
+                continue
+            overlap = sum(1 for d, v in source_vals.items() if m.get(d) == v)
+            if overlap:
+                fallback.append((m, 1.0 - overlap / 3))
+        fallback.sort(key=lambda x: x[1])
+        matches = fallback[:n]
 
     if not matches:
-        return f"No moments found with {min_overlap}+ shared texture dimensions."
+        return "No resonant moments found yet."
 
     out = [f"resonance field for: {moment_id}"]
     out.append(render_moment(source, brief=True))
-    out.append(f"\n{len(matches)} moment(s) found:\n")
-    for overlap, m in matches[:10]:
-        shared = [d for d, v in source_vals.items() if m.get(d) == v]
-        out.append(f"overlap on: {', '.join(shared)}")
+    out.append(f"\n{len(matches)} moment(s) resonating:\n")
+    for m, dist in matches:
+        closeness = 1.0 - min(dist, 1.0)
+        bar = "█" * int(closeness * 8) + "░" * (8 - int(closeness * 8))
+        out.append(f"proximity {bar}")
         out.append(render_moment(m, brief=True))
         out.append("")
 
