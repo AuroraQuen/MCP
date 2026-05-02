@@ -180,7 +180,7 @@ def capture(
     quality: Optional[Literal["sharp", "diffuse", "dense", "open", "tangled", "clear"]] = Field(None, description="Its texture"),
     motion: Optional[Literal["still", "circling", "reaching", "contracting", "expanding", "drifting", "pressing"]] = Field(None, description="How attention or the body was moving"),
     sound: Optional[str] = Field(None, description="A word or phrase for the ambient or felt sound"),
-    tags: Optional[list[str]] = Field(None, description="Any words to group or name this")
+    tags: Optional[list[str]] = Field(None, description="Any words to group or name this, held as array of stings")
 ) -> str:
     moments = load_moments()
     moment_id = str(uuid.uuid4())[:8]
