@@ -137,6 +137,7 @@ def render_moment(m: dict, brief: bool = False) -> str:
         parts.append(f"  tags: {', '.join(tags)}")
     if resonance and not brief:
         parts.append(f"  resonates with: {len(resonance)} other moment(s)")
+    parts.append(f"  id: {m.get('id', '—')}")
 
     return "\n".join(parts)
 
@@ -404,12 +405,14 @@ def find_resonance(
 
     out = [f"resonance field for: {moment_id}"]
     out.append(render_moment(source, brief=True))
+    out.append(f"id: {moment_id}")
     out.append(f"\n{len(matches)} moment(s) resonating:\n")
     for m, dist in matches:
         closeness = 1.0 - min(dist, 1.0)
         bar = "█" * int(closeness * 8) + "░" * (8 - int(closeness * 8))
         out.append(f"proximity {bar}")
         out.append(render_moment(m, brief=True))
+        out.append(f"id: {m['id']}")
         out.append("")
 
     return "\n".join(out)
