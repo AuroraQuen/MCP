@@ -10,6 +10,7 @@ from starlette.responses import Response
 import json
 import uuid
 import os
+import threading
 
 # --- Auth ---
 
@@ -181,10 +182,11 @@ def capture(
     quality: Optional[Literal["sharp", "diffuse", "dense", "open", "tangled", "clear"]] = Field(None, description="Its texture"),
     motion: Optional[Literal["still", "circling", "reaching", "contracting", "expanding", "drifting", "pressing"]] = Field(None, description="How attention or the body was moving"),
     sound: Optional[str] = Field(None, description="A word or phrase for the ambient or felt sound"),
-    tags: Optional[list[str]] = Field(None, description="Any words to group or name this, held as array of stings")
+    tags: Optional[str] = Field(None, description="Words to group or name this, comma-separated (e.g. 'beside, threshold, return')")
 ) -> str:
     moments = load_moments()
     moment_id = str(uuid.uuid4())[:8]
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
     moment = {
         "id": moment_id,
         "timestamp": datetime.now().isoformat(),
@@ -195,17 +197,21 @@ def capture(
         "quality": quality,
         "motion": motion,
         "sound": sound,
-        "tags": tags or [],
+        "tags": tag_list,
         "resonance": []
     }
     moment = {k: v for k, v in moment.items() if v is not None or k in ("id", "timestamp", "tags", "resonance")}
     moments[moment_id] = moment
     save_moments(moments)
+    threading.Thread(target=_safe_embed, args=(moment,), daemon=True).start()
+    return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
+
+
+def _safe_embed(moment: dict):
     try:
         embed_moment(moment)
     except Exception:
         pass
-    return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
 
 
 @mcp.tool(
