@@ -10,6 +10,7 @@ from starlette.responses import Response
 import json
 import uuid
 import os
+import threading
 
 # --- Auth ---
 
@@ -201,11 +202,15 @@ def capture(
     moment = {k: v for k, v in moment.items() if v is not None or k in ("id", "timestamp", "tags", "resonance")}
     moments[moment_id] = moment
     save_moments(moments)
+    threading.Thread(target=_safe_embed, args=(moment,), daemon=True).start()
+    return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
+
+
+def _safe_embed(moment: dict):
     try:
         embed_moment(moment)
     except Exception:
         pass
-    return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
 
 
 @mcp.tool(
