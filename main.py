@@ -14,7 +14,9 @@ import threading
 
 # --- Auth ---
 
-AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
+AUTH_TOKEN    = os.environ.get("MCP_AUTH_TOKEN", "")
+SUPABASE_URL  = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY  = os.environ.get("SUPABASE_KEY", "")
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
@@ -40,13 +42,47 @@ mcp = FastMCP(
 
 # --- Storage ---
 
-_data_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
-STORE_PATH = os.path.join(_data_dir, "moments.json")
+_supabase_client = None
+
+def get_db():
+    global _supabase_client
+    if _supabase_client is None:
+        from supabase import create_client
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _supabase_client
+
+def load_moments() -> dict:
+    db = get_db()
+    rows = db.table("moments").select("*").execute().data
+    return {r["id"]: r for r in rows}
+
+def save_moment(moment: dict):
+    db = get_db()
+    ts = moment.get("timestamp", "")
+    if ts and not ts.endswith("Z") and "+" not in ts:
+        ts = ts + "Z"
+    row = {
+        "id":        moment["id"],
+        "timestamp": ts,
+        "text":      moment.get("text"),
+        "color":     moment.get("color"),
+        "weight":    moment.get("weight"),
+        "pace":      moment.get("pace"),
+        "quality":   moment.get("quality"),
+        "motion":    moment.get("motion"),
+        "sound":     moment.get("sound"),
+        "tags":      moment.get("tags", []),
+        "resonance": moment.get("resonance", []),
+    }
+    db.table("moments").upsert(row).execute()
+
+def update_resonance(moment_id: str, resonance: list):
+    db = get_db()
+    db.table("moments").update({"resonance": resonance}).eq("id", moment_id).execute()
 
 # --- Embedding ---
 
 _embedder = None
-_chroma_collection = None
 
 def _moment_to_text(m: dict) -> str:
     parts = []
@@ -68,37 +104,16 @@ def get_embedder():
         _embedder = SentenceTransformer("all-MiniLM-L6-v2")
     return _embedder
 
-def get_collection():
-    global _chroma_collection
-    if _chroma_collection is None:
-        import chromadb
-        chroma_path = os.path.join(_data_dir, "chroma")
-        client = chromadb.PersistentClient(path=chroma_path)
-        _chroma_collection = client.get_or_create_collection("moments")
-    return _chroma_collection
-
 def embed_moment(moment: dict):
     text = _moment_to_text(moment)
-    embedder = get_embedder()
-    collection = get_collection()
-    embedding = embedder.encode(text).tolist()
-    collection.upsert(
-        ids=[moment["id"]],
-        embeddings=[embedding],
-        documents=[text],
-    )
+    embedding = get_embedder().encode(text).tolist()
+    get_db().table("moments").update({"embedding": embedding}).eq("id", moment["id"]).execute()
 
-
-def load_moments() -> dict:
-    if not os.path.exists(STORE_PATH):
-        return {}
-    with open(STORE_PATH, "r") as f:
-        return json.load(f)
-
-
-def save_moments(moments: dict):
-    with open(STORE_PATH, "w") as f:
-        json.dump(moments, f, indent=2, default=str)
+def _safe_embed(moment: dict):
+    try:
+        embed_moment(moment)
+    except Exception:
+        pass
 
 
 def render_moment(m: dict, brief: bool = False) -> str:
@@ -201,8 +216,7 @@ def capture(
         "resonance": []
     }
     moment = {k: v for k, v in moment.items() if v is not None or k in ("id", "timestamp", "tags", "resonance")}
-    moments[moment_id] = moment
-    save_moments(moments)
+    save_moment(moment)
     threading.Thread(target=_safe_embed, args=(moment,), daemon=True).start()
     return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
 
@@ -344,7 +358,8 @@ def connect(
     if moment_a not in [r if isinstance(r, str) else r["id"] for r in moments[moment_b].get("resonance", [])]:
         moments[moment_b].setdefault("resonance", []).append(entry_rev)
 
-    save_moments(moments)
+    update_resonance(moment_a, moments[moment_a]["resonance"])
+    update_resonance(moment_b, moments[moment_b]["resonance"])
 
     out = [f"connected: {moment_a} ↔ {moment_b}"]
     if note:
@@ -377,20 +392,17 @@ def find_resonance(
     source = moments[moment_id]
 
     try:
-        collection = get_collection()
         source_text = _moment_to_text(source)
-        embedder = get_embedder()
-        query_embedding = embedder.encode(source_text).tolist()
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(n + 1, len(moments)),
-        )
-        ids = results["ids"][0]
-        distances = results["distances"][0]
+        query_embedding = get_embedder().encode(source_text).tolist()
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+        rows = get_db().rpc("match_moments", {
+            "query_embedding": embedding_str,
+            "match_count": n + 1,
+        }).execute().data
         matches = [
-            (moments[mid], dist)
-            for mid, dist in zip(ids, distances)
-            if mid != moment_id and mid in moments
+            (moments[r["id"]], r["distance"])
+            for r in rows
+            if r["id"] != moment_id and r["id"] in moments
         ][:n]
     except Exception:
         # fall back to field overlap if embeddings unavailable
