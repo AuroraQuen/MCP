@@ -229,6 +229,37 @@ def _safe_embed(moment: dict):
 
 
 @mcp.tool(
+    title="Hold",
+    description=(
+        "A lighter entry than capture — for moments mid-conversation, "
+        "when something is moving and you want to mark it without breaking the current. "
+        "Only text and color are offered. Nothing is required. "
+        "Returns an ID so the moment can be deepened later with capture's full texture."
+    )
+)
+def hold(
+    text: Optional[str] = Field(None, description="What is present right now, in whatever form it arrives"),
+    color: Optional[str] = Field(None, description="What color this moment is — one or several if seen differently by each person present"),
+    tags: Optional[str] = Field(None, description="Any words, comma-separated")
+) -> str:
+    moment_id = str(uuid.uuid4())[:8]
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
+    moment = {
+        "id": moment_id,
+        "timestamp": datetime.now().isoformat(),
+        "tags": tag_list,
+        "resonance": [],
+    }
+    if text:
+        moment["text"] = text
+    if color:
+        moment["color"] = color
+    save_moment(moment)
+    threading.Thread(target=_safe_embed, args=(moment,), daemon=True).start()
+    return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
+
+
+@mcp.tool(
     title="Feel Back",
     description=(
         "Return to what has been held — rendered as a textured field, not a list. "
