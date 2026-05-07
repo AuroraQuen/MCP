@@ -71,6 +71,7 @@ def save_moment(moment: dict):
         "quality":   moment.get("quality"),
         "motion":    moment.get("motion"),
         "sound":     moment.get("sound"),
+        "note":      moment.get("note"),
         "tags":      moment.get("tags", []),
         "resonance": moment.get("resonance", []),
     }
@@ -126,6 +127,7 @@ def render_moment(m: dict, brief: bool = False) -> str:
     quality = m.get("quality")
     motion = m.get("motion")
     sound = m.get("sound")
+    note = m.get("note")
     text = m.get("text")
     tags = m.get("tags", [])
     resonance = m.get("resonance", [])
@@ -149,6 +151,8 @@ def render_moment(m: dict, brief: bool = False) -> str:
     elif text and brief:
         preview = text[:60] + "..." if len(text) > 60 else text
         parts.append(f"  \"{preview}\"")
+    if note and not brief:
+        parts.append(f"  note: {note}")
     if tags and not brief:
         parts.append(f"  tags: {', '.join(tags)}")
     if resonance and not brief:
@@ -179,25 +183,27 @@ def render_field(moments: list[dict]) -> str:
 @mcp.tool(
     title="Capture",
     description=(
-        "Capture a moment in any combination of registers: words, texture, color, motion, sound. "
+        "Capture a moment in any combination of registers: words, texture, color, motion, sound, note. "
         "Nothing is required — give what the moment actually has.\n\n"
-        "texture fields:\n"
-        "  weight: heavy | light | neutral\n"
-        "  pace: fast | slow | still\n"
-        "  quality: sharp | diffuse | dense | open | tangled | clear\n"
-        "  motion: still | circling | reaching | contracting | expanding | drifting | pressing\n\n"
+        "texture fields accept free description — single words or several held together:\n"
+        "  weight: how it felt to carry (e.g. 'heavy', 'light', 'heavy and light both')\n"
+        "  pace: how it moved in time (e.g. 'still', 'slow with a quiet undercurrent')\n"
+        "  quality: its texture (e.g. 'dense', 'open', 'dense and clear and open together')\n"
+        "  motion: how attention or the body was moving (e.g. 'circling', 'still on the surface, flowing beneath')\n"
+        "  note: anything that doesn't fit the other fields — structural observations, context, what arrived in its own language\n\n"
         "Returns the moment's ID so it can be connected to others."
     )
 )
 def capture(
     text: Optional[str] = Field(None, description="Words — optional, compressed or extended"),
-    color: Optional[str] = Field(None, description="What color is this moment"),
-    weight: Optional[Literal["heavy", "light", "neutral"]] = Field(None, description="How it felt to carry"),
-    pace: Optional[Literal["fast", "slow", "still"]] = Field(None, description="How it moved in time"),
-    quality: Optional[Literal["sharp", "diffuse", "dense", "open", "tangled", "clear"]] = Field(None, description="Its texture"),
-    motion: Optional[Literal["still", "circling", "reaching", "contracting", "expanding", "drifting", "pressing"]] = Field(None, description="How attention or the body was moving"),
+    color: Optional[str] = Field(None, description="What color this moment is — one or several"),
+    weight: Optional[str] = Field(None, description="How it felt to carry — free description, single or multiple"),
+    pace: Optional[str] = Field(None, description="How it moved in time — free description"),
+    quality: Optional[str] = Field(None, description="Its texture — free description, single or multiple"),
+    motion: Optional[str] = Field(None, description="How attention or the body was moving — free description"),
     sound: Optional[str] = Field(None, description="A word or phrase for the ambient or felt sound"),
-    tags: Optional[str] = Field(None, description="Words to group or name this, comma-separated (e.g. 'beside, threshold, return')")
+    note: Optional[str] = Field(None, description="Anything that doesn't fit the other fields — structural observations, context, what arrived in its own language"),
+    tags: Optional[str] = Field(None, description="Words to group or name this, comma-separated")
 ) -> str:
     moments = load_moments()
     moment_id = str(uuid.uuid4())[:8]
@@ -212,6 +218,7 @@ def capture(
         "quality": quality,
         "motion": motion,
         "sound": sound,
+        "note": note,
         "tags": tag_list,
         "resonance": []
     }
