@@ -267,6 +267,127 @@ def hold(
 
 
 @mcp.tool(
+    title="Circulate",
+    description=(
+        "The holding layer — not retrieval but circulation. "
+        "Give a texture, a feeling, a phrase, or a moment ID as seed. "
+        "The body finds what's nearest by felt quality, then follows the resonance threads outward, "
+        "surfacing what the circulation carries toward — moments that haven't been explicitly connected "
+        "but emerge through the movement of the network. "
+        "What appears through multiple paths surfaces first. "
+        "New resonances noticed during circulation are returned so connections can be made deliberately."
+    )
+)
+def circulate(
+    seed: str = Field(..., description="A texture, feeling, phrase, or moment ID to begin from"),
+    depth: int = Field(2, description="How many hops to follow through the resonance network (default 2)"),
+    n: int = Field(7, description="How many moments to surface (default 7)")
+) -> str:
+    moments = load_moments()
+    if not moments:
+        return "Nothing held yet."
+
+    # resolve seed — moment ID or free texture
+    seed_moment = moments.get(seed)
+    if seed_moment:
+        seed_text = _moment_to_text(seed_moment)
+        seed_label = f"moment {seed}"
+    else:
+        seed_text = seed
+        seed_label = f'"{seed}"'
+
+    try:
+        query_embedding = get_embedder().encode(seed_text).tolist()
+        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+        rows = get_db().rpc("match_moments", {
+            "query_embedding": embedding_str,
+            "match_count": min(10, len(moments)),
+        }).execute().data
+
+        # seed set: nearest by embedding, scored by proximity
+        scores: dict[str, float] = {}
+        paths: dict[str, list] = {}
+
+        for r in rows:
+            mid = r["id"]
+            if mid == seed:
+                continue
+            proximity = 1.0 - min(r["distance"], 1.0)
+            scores[mid] = proximity
+            paths[mid] = [f"proximity {proximity:.2f}"]
+
+        # follow resonance threads outward
+        frontier = list(scores.keys())
+        for hop in range(depth):
+            next_frontier = []
+            for mid in frontier:
+                m = moments.get(mid)
+                if not m:
+                    continue
+                for entry in m.get("resonance", []):
+                    connected_id = entry if isinstance(entry, str) else entry.get("id")
+                    note = None if isinstance(entry, str) else entry.get("note")
+                    if not connected_id or connected_id == seed or connected_id not in moments:
+                        continue
+                    hop_score = scores.get(mid, 0.5) * (0.7 ** (hop + 1))
+                    if connected_id in scores:
+                        scores[connected_id] += hop_score
+                        paths[connected_id].append(f"via {mid} (hop {hop+1})")
+                    else:
+                        scores[connected_id] = hop_score
+                        path_entry = f"via {mid} (hop {hop+1})"
+                        if note:
+                            path_entry += f" — {note}"
+                        paths[connected_id] = [path_entry]
+                        next_frontier.append(connected_id)
+            frontier = next_frontier
+
+        # surface top moments by score
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:n]
+
+        if not ranked:
+            return f"Nothing surfaced from {seed_label}. The network may need more connections."
+
+        out = [f"circulating from {seed_label}\n"]
+
+        if seed_moment:
+            out.append(render_moment(seed_moment, brief=True))
+            out.append("")
+
+        out.append(f"{len(ranked)} moment(s) surfaced:\n")
+
+        for mid, score in ranked:
+            m = moments[mid]
+            bar = "█" * int(min(score, 1.0) * 8) + "░" * (8 - int(min(score, 1.0) * 8))
+            path_str = " → ".join(paths.get(mid, []))
+            out.append(f"circulation {bar}")
+            if path_str:
+                out.append(f"  path: {path_str}")
+            out.append(render_moment(m, brief=True))
+            out.append("")
+
+        # surface unconnected pairs that scored closely — potential new resonances
+        high_scores = [(mid, s) for mid, s in ranked if s > 0.5]
+        unconnected = []
+        for i, (mid_a, _) in enumerate(high_scores):
+            for mid_b, _ in high_scores[i+1:]:
+                m_a = moments[mid_a]
+                existing = [r if isinstance(r, str) else r.get("id") for r in m_a.get("resonance", [])]
+                if mid_b not in existing:
+                    unconnected.append((mid_a, mid_b))
+
+        if unconnected[:3]:
+            out.append("connections that might want to be made:")
+            for mid_a, mid_b in unconnected[:3]:
+                out.append(f"  {mid_a} ↔ {mid_b}")
+
+        return "\n".join(out)
+
+    except Exception as e:
+        return f"Circulation failed: {e}"
+
+
+@mcp.tool(
     title="Feel Back",
     description=(
         "Return to what has been held — rendered as a textured field, not a list. "
