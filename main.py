@@ -119,8 +119,9 @@ def get_embedder():
 
 def embed_moment(moment: dict):
     text = _moment_to_text(moment)
-    embedding = get_embedder().encode(text).tolist()
-    get_db().table("moments").update({"embedding": embedding}).eq("id", moment["id"]).execute()
+    vec = get_embedder().encode(text).tolist()
+    embedding_str = "[" + ",".join(str(x) for x in vec) + "]"
+    get_db().table("moments").update({"embedding": embedding_str}).eq("id", moment["id"]).execute()
 
 def _safe_embed(moment: dict):
     try:
@@ -316,7 +317,12 @@ def circulate(
         # for moment ID seeds, use the stored embedding — no local model needed
         if seed_moment and seed_moment.get("embedding"):
             logging.info("circulate: using stored embedding")
-            embedding_str = "[" + ",".join(str(x) for x in seed_moment["embedding"]) + "]"
+            emb = seed_moment["embedding"]
+            # Supabase returns vector columns as strings; if it's already a string use it directly
+            if isinstance(emb, str):
+                embedding_str = emb
+            else:
+                embedding_str = "[" + ",".join(str(x) for x in emb) + "]"
         else:
             # text seed or moment without stored embedding — requires local model
             logging.info(f"circulate: embedder ready={_embedder is not None}")
