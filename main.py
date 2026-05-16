@@ -6,6 +6,9 @@ from collections import Counter
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 from starlette.responses import Response
 import json
 import uuid
@@ -308,8 +311,25 @@ def circulate(
         seed_label = f'"{seed}"'
 
     try:
-        query_embedding = get_embedder().encode(seed_text).tolist()
-        embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+        logging.info(f"circulate: seed={seed_label} depth={depth} n={n}")
+
+        # for moment ID seeds, use the stored embedding — no local model needed
+        if seed_moment and seed_moment.get("embedding"):
+            logging.info("circulate: using stored embedding")
+            embedding_str = "[" + ",".join(str(x) for x in seed_moment["embedding"]) + "]"
+        else:
+            # text seed or moment without stored embedding — requires local model
+            logging.info(f"circulate: embedder ready={_embedder is not None}")
+            if _embedder is None:
+                return (
+                    "Embedding model is still loading — this usually takes 10-20 seconds "
+                    "on first startup. Try again in a moment, or pass a moment ID as seed "
+                    "to bypass the model entirely."
+                )
+            query_embedding = _embedder.encode(seed_text).tolist()
+            embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+
+        logging.info("circulate: running match_moments RPC")
         rows = db.rpc("match_moments", {
             "query_embedding": embedding_str,
             "match_count": max(n + 3, 8),
