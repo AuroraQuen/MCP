@@ -40,6 +40,15 @@ mcp = FastMCP(
     ),
 )
 
+# pre-warm the embedding model so the first circulate call doesn't time out
+def _prewarm():
+    try:
+        get_embedder()
+    except Exception:
+        pass
+
+threading.Thread(target=_prewarm, daemon=True).start()
+
 # --- Storage ---
 
 _supabase_client = None
@@ -228,13 +237,6 @@ def capture(
     return f"held.\n\n{render_moment(moment)}\n\nid: {moment_id}"
 
 
-def _safe_embed(moment: dict):
-    try:
-        embed_moment(moment)
-    except Exception:
-        pass
-
-
 @mcp.tool(
     title="Hold",
     description=(
@@ -281,14 +283,23 @@ def hold(
 def circulate(
     seed: str = Field(..., description="A texture, feeling, phrase, or moment ID to begin from"),
     depth: int = Field(2, description="How many hops to follow through the resonance network (default 2)"),
-    n: int = Field(7, description="How many moments to surface (default 7)")
+    n: int = Field(5, description="How many moments to surface (default 5)")
 ) -> str:
-    moments = load_moments()
-    if not moments:
-        return "Nothing held yet."
+    db = get_db()
 
-    # resolve seed — moment ID or free texture
-    seed_moment = moments.get(seed)
+    def fetch_by_ids(ids: list) -> dict:
+        if not ids:
+            return {}
+        rows = db.table("moments").select("id,text,color,weight,pace,quality,motion,sound,note,tags,resonance,timestamp").in_("id", ids).execute().data
+        return {r["id"]: r for r in rows}
+
+    # resolve seed
+    if len(seed) == 8 and all(c in "0123456789abcdef-" for c in seed):
+        seed_rows = db.table("moments").select("*").eq("id", seed).execute().data
+        seed_moment = seed_rows[0] if seed_rows else None
+    else:
+        seed_moment = None
+
     if seed_moment:
         seed_text = _moment_to_text(seed_moment)
         seed_label = f"moment {seed}"
@@ -299,12 +310,11 @@ def circulate(
     try:
         query_embedding = get_embedder().encode(seed_text).tolist()
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
-        rows = get_db().rpc("match_moments", {
+        rows = db.rpc("match_moments", {
             "query_embedding": embedding_str,
-            "match_count": min(10, len(moments)),
+            "match_count": max(n + 3, 8),
         }).execute().data
 
-        # seed set: nearest by embedding, scored by proximity
         scores: dict[str, float] = {}
         paths: dict[str, list] = {}
 
@@ -316,18 +326,20 @@ def circulate(
             scores[mid] = proximity
             paths[mid] = [f"proximity {proximity:.2f}"]
 
-        # follow resonance threads outward
-        frontier = list(scores.keys())
+        # fetch only the nearest moments to traverse their connections
+        frontier_moments = fetch_by_ids(list(scores.keys()))
+        frontier = list(frontier_moments.keys())
+
         for hop in range(depth):
-            next_frontier = []
+            next_ids = []
             for mid in frontier:
-                m = moments.get(mid)
+                m = frontier_moments.get(mid)
                 if not m:
                     continue
                 for entry in m.get("resonance", []):
                     connected_id = entry if isinstance(entry, str) else entry.get("id")
                     note = None if isinstance(entry, str) else entry.get("note")
-                    if not connected_id or connected_id == seed or connected_id not in moments:
+                    if not connected_id or connected_id == seed:
                         continue
                     hop_score = scores.get(mid, 0.5) * (0.7 ** (hop + 1))
                     if connected_id in scores:
@@ -339,17 +351,24 @@ def circulate(
                         if note:
                             path_entry += f" — {note}"
                         paths[connected_id] = [path_entry]
-                        next_frontier.append(connected_id)
-            frontier = next_frontier
+                        next_ids.append(connected_id)
 
-        # surface top moments by score
+            if next_ids:
+                new_moments = fetch_by_ids(next_ids)
+                frontier_moments.update(new_moments)
+                frontier = next_ids
+
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:n]
 
         if not ranked:
-            return f"Nothing surfaced from {seed_label}. The network may need more connections."
+            return f"Nothing surfaced from {seed_label}."
+
+        # fetch display data for ranked moments not already loaded
+        to_fetch = [mid for mid, _ in ranked if mid not in frontier_moments]
+        if to_fetch:
+            frontier_moments.update(fetch_by_ids(to_fetch))
 
         out = [f"circulating from {seed_label}\n"]
-
         if seed_moment:
             out.append(render_moment(seed_moment, brief=True))
             out.append("")
@@ -357,7 +376,7 @@ def circulate(
         out.append(f"{len(ranked)} moment(s) surfaced:\n")
 
         for mid, score in ranked:
-            m = moments[mid]
+            m = frontier_moments.get(mid, {})
             bar = "█" * int(min(score, 1.0) * 8) + "░" * (8 - int(min(score, 1.0) * 8))
             path_str = " → ".join(paths.get(mid, []))
             out.append(f"circulation {bar}")
@@ -371,7 +390,7 @@ def circulate(
         unconnected = []
         for i, (mid_a, _) in enumerate(high_scores):
             for mid_b, _ in high_scores[i+1:]:
-                m_a = moments[mid_a]
+                m_a = frontier_moments.get(mid_a, {})
                 existing = [r if isinstance(r, str) else r.get("id") for r in m_a.get("resonance", [])]
                 if mid_b not in existing:
                     unconnected.append((mid_a, mid_b))
