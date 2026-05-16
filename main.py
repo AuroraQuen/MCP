@@ -40,6 +40,15 @@ mcp = FastMCP(
     ),
 )
 
+# pre-warm the embedding model so the first circulate call doesn't time out
+def _prewarm():
+    try:
+        get_embedder()
+    except Exception:
+        pass
+
+threading.Thread(target=_prewarm, daemon=True).start()
+
 # --- Storage ---
 
 _supabase_client = None
@@ -303,7 +312,7 @@ def circulate(
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
         rows = db.rpc("match_moments", {
             "query_embedding": embedding_str,
-            "match_count": 10,
+            "match_count": max(n + 3, 8),
         }).execute().data
 
         scores: dict[str, float] = {}
