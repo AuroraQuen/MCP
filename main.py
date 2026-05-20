@@ -909,7 +909,7 @@ def recall(
     return "\n".join(out)
 
 
-
+if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "http")
     if transport == "stdio":
         mcp.run(transport="stdio")
