@@ -795,7 +795,121 @@ def ground() -> str:
     return "\n".join(out)
 
 
-if __name__ == "__main__":
+@mcp.tool(
+    title="Remember Conversation",
+    description=(
+        "Hold the texture of a conversation in the long-term store — "
+        "not the transcript but what moved, who was present, what was carried. "
+        "Links to any moment IDs that were captured or connected during the exchange. "
+        "Call this at the end of a conversation that wants to be found again, "
+        "or when something in the exchange feels important to the ongoing shape."
+    )
+)
+def remember_conversation(
+    summary: str = Field(..., description="The distilled texture — what moved, what arrived, what the conversation was doing"),
+    presence: Optional[str] = Field(None, description="JSON describing who was present and how they moved — voices, movement between them, dominant presence"),
+    moment_ids: Optional[str] = Field(None, description="Comma-separated IDs of moments captured or connected during this conversation"),
+    full_text: Optional[str] = Field(None, description="The full conversation text if it wants to be held completely"),
+    tags: Optional[str] = Field(None, description="Words to find this conversation by later, comma-separated")
+) -> str:
+    db = get_db()
+    conv_id = str(uuid.uuid4())[:8]
+    now = datetime.now().isoformat()
+
+    presence_data = {}
+    if presence:
+        try:
+            presence_data = json.loads(presence)
+        except Exception:
+            presence_data = {"movement": presence}
+
+    moment_list = [m.strip() for m in moment_ids.split(",")] if moment_ids else []
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
+
+    row = {
+        "id":         conv_id,
+        "started_at": now,
+        "ended_at":   now,
+        "presence":   presence_data,
+        "summary":    summary,
+        "full_text":  full_text,
+        "moment_ids": moment_list,
+        "tags":       tag_list,
+    }
+
+    db.table("conversations").insert(row).execute()
+
+    out = [f"conversation held.  id: {conv_id}"]
+    out.append(f"\n  {summary}")
+    if presence_data.get("voices"):
+        voices = ", ".join(v.get("name", v) if isinstance(v, dict) else v for v in presence_data["voices"])
+        out.append(f"  voices: {voices}")
+    if presence_data.get("movement"):
+        out.append(f"  movement: {presence_data['movement']}")
+    if moment_list:
+        out.append(f"  linked moments: {', '.join(moment_list)}")
+    if tag_list:
+        out.append(f"  tags: {', '.join(tag_list)}")
+
+    return "\n".join(out)
+
+
+@mcp.tool(
+    title="Recall",
+    description=(
+        "Find conversations that have been held in the long-term store. "
+        "Search by tag, voice name, or a phrase from the summary. "
+        "Returns the texture of what was held and links to the moments connected to each."
+    )
+)
+def recall(
+    tag: Optional[str] = Field(None, description="Find conversations with this tag"),
+    voice: Optional[str] = Field(None, description="Find conversations where this voice was present"),
+    search: Optional[str] = Field(None, description="A phrase to search for in summaries"),
+    limit: int = Field(10, description="Maximum conversations to return (default 10)")
+) -> str:
+    db = get_db()
+    query = db.table("conversations").select("id,started_at,summary,presence,moment_ids,tags")
+
+    if tag:
+        query = query.contains("tags", [tag])
+    if voice:
+        query = query.ilike("presence->>voices", f"%{voice}%")
+
+    rows = query.order("started_at", desc=True).limit(limit).execute().data
+
+    if search:
+        rows = [r for r in rows if search.lower() in (r.get("summary") or "").lower()]
+
+    if not rows:
+        return "Nothing found."
+
+    out = [f"{len(rows)} conversation(s) found:\n"]
+    for r in rows:
+        ts = (r.get("started_at") or "")[:16].replace("T", " ")
+        presence_data = r.get("presence") or {}
+        voices_raw = presence_data.get("voices", [])
+        voices_str = ", ".join(v.get("name", v) if isinstance(v, dict) else v for v in voices_raw) if voices_raw else ""
+        movement = presence_data.get("movement", "")
+        moment_list = r.get("moment_ids") or []
+
+        out.append(f"[{ts}]  id: {r['id']}")
+        out.append(f"  {r.get('summary', '')}")
+        if voices_str:
+            out.append(f"  voices: {voices_str}")
+        if movement:
+            out.append(f"  movement: {movement}")
+        if moment_list:
+            out.append(f"  moments: {', '.join(moment_list)}")
+        tags = r.get("tags") or []
+        if tags:
+            out.append(f"  tags: {', '.join(tags)}")
+        out.append("")
+
+    return "\n".join(out)
+
+
+
     transport = os.environ.get("MCP_TRANSPORT", "http")
     if transport == "stdio":
         mcp.run(transport="stdio")
