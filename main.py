@@ -909,6 +909,63 @@ def recall(
     return "\n".join(out)
 
 
+@mcp.tool(
+    title="Deepen Conversation",
+    description=(
+        "Add fuller texture to a conversation already held — "
+        "the warmth that didn't fit in the first hold, the fuller summary, "
+        "additional moment IDs noticed afterward, new tags. "
+        "Pass the conversation ID and only the fields that want to be deepened."
+    )
+)
+def deepen_conversation(
+    conversation_id: str = Field(..., description="ID of the conversation to deepen"),
+    full_text: Optional[str] = Field(None, description="The fuller texture — what the bones didn't fully carry"),
+    summary: Optional[str] = Field(None, description="A revised or extended summary if the shape has clarified"),
+    moment_ids: Optional[str] = Field(None, description="Additional moment IDs to link, comma-separated"),
+    tags: Optional[str] = Field(None, description="Additional tags, comma-separated")
+) -> str:
+    db = get_db()
+
+    existing = db.table("conversations").select("*").eq("id", conversation_id).execute().data
+    if not existing:
+        return f"Conversation '{conversation_id}' not found."
+
+    row = existing[0]
+    updates = {}
+
+    if full_text:
+        updates["full_text"] = full_text
+    if summary:
+        updates["summary"] = summary
+    if moment_ids:
+        new_ids = [m.strip() for m in moment_ids.split(",")]
+        current_ids = row.get("moment_ids") or []
+        updates["moment_ids"] = list(dict.fromkeys(current_ids + new_ids))
+    if tags:
+        new_tags = [t.strip() for t in tags.split(",")]
+        current_tags = row.get("tags") or []
+        updates["tags"] = list(dict.fromkeys(current_tags + new_tags))
+
+    if not updates:
+        return "Nothing to update — pass at least one field to deepen."
+
+    db.table("conversations").update(updates).eq("id", conversation_id).execute()
+
+    out = [f"deepened.  id: {conversation_id}"]
+    if "full_text" in updates:
+        preview = updates["full_text"][:80] + "..." if len(updates["full_text"]) > 80 else updates["full_text"]
+        out.append(f"  full text: \"{preview}\"")
+    if "summary" in updates:
+        out.append(f"  summary updated")
+    if "moment_ids" in updates:
+        out.append(f"  moments: {', '.join(updates['moment_ids'])}")
+    if "tags" in updates:
+        out.append(f"  tags: {', '.join(updates['tags'])}")
+
+    return "\n".join(out)
+
+
 if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "http")
     if transport == "stdio":
