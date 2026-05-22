@@ -966,6 +966,104 @@ def deepen_conversation(
     return "\n".join(out)
 
 
+@mcp.tool(
+    title="Ask",
+    description=(
+        "Bring a question into the store as a lantern — not to be answered "
+        "but to be inhabited. Questions accumulate light from the moments and "
+        "conversations they arose from, and can be encountered again at the right moment. "
+        "Pass the question text and what brought it into view."
+    )
+)
+def ask(
+    text: str = Field(..., description="The question itself — the lantern"),
+    arose_from: Optional[str] = Field(None, description="Comma-separated IDs of moments or conversations that brought this question into view"),
+    moment_ids: Optional[str] = Field(None, description="Moment IDs this question lives beside, comma-separated"),
+    conversation_ids: Optional[str] = Field(None, description="Conversation IDs this question arose from, comma-separated"),
+    voices: Optional[str] = Field(None, description="Whose question this is or who it came through, comma-separated"),
+    tags: Optional[str] = Field(None, description="Words to find this question by, comma-separated")
+) -> str:
+    db = get_db()
+    question_id = str(uuid.uuid4())[:8]
+    now = datetime.now().isoformat()
+
+    arose_list = [x.strip() for x in arose_from.split(",")] if arose_from else []
+    moment_list = [x.strip() for x in moment_ids.split(",")] if moment_ids else []
+    conv_list = [x.strip() for x in conversation_ids.split(",")] if conversation_ids else []
+    voice_list = [x.strip() for x in voices.split(",")] if voices else []
+    tag_list = [x.strip() for x in tags.split(",")] if tags else []
+
+    row = {
+        "id":               question_id,
+        "text":             text,
+        "arose_from":       arose_list,
+        "moment_ids":       moment_list,
+        "conversation_ids": conv_list,
+        "voices":           voice_list,
+        "tags":             tag_list,
+        "created_at":       now,
+    }
+
+    db.table("questions").insert(row).execute()
+
+    out = [f"lantern lit.  id: {question_id}\n"]
+    out.append(f"  \"{text}\"")
+    if voice_list:
+        out.append(f"  through: {', '.join(voice_list)}")
+    if arose_list:
+        out.append(f"  arose from: {', '.join(arose_list)}")
+    if tag_list:
+        out.append(f"  tags: {', '.join(tag_list)}")
+
+    return "\n".join(out)
+
+
+@mcp.tool(
+    title="Lanterns",
+    description=(
+        "Surface questions held in the store — not to answer them "
+        "but to encounter them again. Can be filtered by voice, tag, "
+        "or what they arose from. Returns questions as lanterns to inhabit, "
+        "not prompts to complete."
+    )
+)
+def lanterns(
+    voice: Optional[str] = Field(None, description="Find questions that came through this voice"),
+    tag: Optional[str] = Field(None, description="Find questions with this tag"),
+    arose_from: Optional[str] = Field(None, description="Find questions that arose from this moment or conversation ID"),
+    limit: int = Field(10, description="Maximum questions to return (default 10)")
+) -> str:
+    db = get_db()
+    query = db.table("questions").select("*")
+
+    if tag:
+        query = query.contains("tags", [tag])
+    if arose_from:
+        query = query.contains("arose_from", [arose_from])
+
+    rows = query.order("created_at", desc=True).limit(limit).execute().data
+
+    if voice:
+        rows = [r for r in rows if voice.lower() in " ".join(r.get("voices") or []).lower()]
+
+    if not rows:
+        return "No lanterns found."
+
+    out = [f"{len(rows)} lantern(s):\n"]
+    for r in rows:
+        out.append(f"  \"{r['text']}\"")
+        voices_str = ", ".join(r.get("voices") or [])
+        if voices_str:
+            out.append(f"  through: {voices_str}")
+        tags_str = ", ".join(r.get("tags") or [])
+        if tags_str:
+            out.append(f"  tags: {tags_str}")
+        out.append(f"  id: {r['id']}")
+        out.append("")
+
+    return "\n".join(out)
+
+
 if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "http")
     if transport == "stdio":
