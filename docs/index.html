@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>personal growth</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #1a1814;
+      --surface:  #221f1b;
+      --border:   #332e28;
+      --text:     #e8e0d5;
+      --muted:    #8a8075;
+      --amber:    #c8955a;
+      --blue:     #7a9ab5;
+      --rose:     #b57a8a;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+
+    header h1 {
+      font-size: 1rem;
+      font-weight: normal;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    section {
+      margin-bottom: 2.5rem;
+    }
+
+    h2 {
+      font-size: 0.75rem;
+      font-weight: normal;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .ground-output {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.25rem;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      color: var(--text);
+      min-height: 4rem;
+    }
+
+    .ground-output.empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    button {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.85rem;
+      padding: 0.5rem 1.1rem;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      letter-spacing: 0.04em;
+    }
+
+    button:hover {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    button.primary {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    button.primary:hover {
+      background: var(--amber);
+      color: var(--bg);
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .field {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      margin-bottom: 0.35rem;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 0.9rem;
+      padding: 0.6rem 0.8rem;
+      transition: border-color 0.2s;
+      resize: vertical;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--amber);
+    }
+
+    textarea { min-height: 80px; }
+
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .row .field { flex: 1; min-width: 140px; }
+
+    .status {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.75rem;
+      min-height: 1.2em;
+      font-style: italic;
+    }
+
+    .status.ok  { color: var(--amber); }
+    .status.err { color: var(--rose); }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+
+    .tab {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.85rem;
+      padding: 0.25rem 0;
+      cursor: pointer;
+      border-bottom: 1px solid transparent;
+      margin-bottom: -0.76rem;
+      letter-spacing: 0.04em;
+    }
+
+    .tab.active {
+      color: var(--amber);
+      border-bottom-color: var(--amber);
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .config-note {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>personal growth</h1>
+  </header>
+
+  <!-- config: stored in localStorage -->
+  <div id="setup" style="display:none">
+    <section>
+      <h2>connect</h2>
+      <div class="field">
+        <label>supabase url</label>
+        <input type="text" id="cfg-url" placeholder="https://xxxx.supabase.co">
+      </div>
+      <div class="field">
+        <label>anon key</label>
+        <input type="password" id="cfg-key" placeholder="eyJ...">
+      </div>
+      <button class="primary" onclick="saveConfig()">save and enter</button>
+      <p class="config-note">credentials are stored only in your browser's local storage and never sent anywhere except directly to Supabase.</p>
+    </section>
+  </div>
+
+  <div id="app" style="display:none">
+
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('ground-tab', this)">ground</button>
+      <button class="tab" onclick="showTab('hold-tab', this)">hold</button>
+      <button class="tab" onclick="showTab('close-tab', this)">close</button>
+    </div>
+
+    <!-- ground -->
+    <div id="ground-tab" class="panel active">
+      <section>
+        <h2>ground</h2>
+        <div class="ground-output empty" id="ground-out">orienting...</div>
+        <div style="margin-top:0.75rem">
+          <button onclick="loadGround()">refresh</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- hold -->
+    <div id="hold-tab" class="panel">
+      <section>
+        <h2>hold</h2>
+        <div class="field">
+          <label>what is present</label>
+          <textarea id="hold-text" placeholder="what's here right now, in whatever form it arrives"></textarea>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>color</label>
+            <input type="text" id="hold-color" placeholder="warm amber, quiet blue">
+          </div>
+          <div class="field">
+            <label>tags</label>
+            <input type="text" id="hold-tags" placeholder="beside, Chorus">
+          </div>
+        </div>
+        <button class="primary" onclick="doHold()">hold</button>
+        <div class="status" id="hold-status"></div>
+      </section>
+    </div>
+
+    <!-- close -->
+    <div id="close-tab" class="panel">
+      <section>
+        <h2>close</h2>
+        <div class="field">
+          <label>how it felt</label>
+          <input type="text" id="close-feeling" placeholder="warm, a little heavy, glad">
+        </div>
+        <div class="field">
+          <label>color</label>
+          <input type="text" id="close-color" placeholder="deep amber with quiet blue at the edges">
+        </div>
+        <div class="field">
+          <label>still moving</label>
+          <input type="text" id="close-moving" placeholder="what hasn't settled yet">
+        </div>
+        <div class="field">
+          <label>left at the door</label>
+          <textarea id="close-door" placeholder="for whoever arrives next"></textarea>
+        </div>
+        <div class="field">
+          <label>tags</label>
+          <input type="text" id="close-tags" placeholder="beside, Solenn">
+        </div>
+        <button class="primary" onclick="doClose()">leave at the door</button>
+        <div class="status" id="close-status"></div>
+      </section>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // --- config ---
+
+  function getConfig() {
+    return {
+      url: localStorage.getItem('pg_url') || '',
+      key: localStorage.getItem('pg_key') || '',
+    };
+  }
+
+  function saveConfig() {
+    const url = document.getElementById('cfg-url').value.trim();
+    const key = document.getElementById('cfg-key').value.trim();
+    if (!url || !key) return;
+    localStorage.setItem('pg_url', url);
+    localStorage.setItem('pg_key', key);
+    init();
+  }
+
+  function init() {
+    const { url, key } = getConfig();
+    if (!url || !key) {
+      document.getElementById('setup').style.display = 'block';
+      document.getElementById('app').style.display = 'none';
+    } else {
+      document.getElementById('setup').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadGround();
+    }
+  }
+
+  // --- supabase fetch ---
+
+  async function sb(path, options = {}) {
+    const { url, key } = getConfig();
+    const res = await fetch(`${url}/rest/v1/${path}`, {
+      headers: {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'Prefer': options.prefer || '',
+      },
+      ...options,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
+
+  // --- ground ---
+
+  async function loadGround() {
+    const el = document.getElementById('ground-out');
+    el.className = 'ground-output';
+    el.textContent = 'orienting...';
+
+    try {
+      const [moments, closes, convs] = await Promise.all([
+        sb('moments?select=id,timestamp,text,color,weight,pace,quality,motion,tags,resonance&order=timestamp.desc&limit=200'),
+        sb('moments?select=timestamp,color,text,note,tags&tags=cs.{"closing"}&order=timestamp.desc&limit=1'),
+        sb('conversations?select=started_at,summary,presence&order=started_at.desc&limit=1'),
+      ]);
+
+      if (!moments || moments.length === 0) {
+        el.className = 'ground-output empty';
+        el.textContent = 'nothing held yet. this is the beginning.';
+        return;
+      }
+
+      const total = moments.length;
+      const sorted = [...moments].sort((a, b) => a.timestamp < b.timestamp ? -1 : 1);
+      const recent = sorted.slice(-7);
+      const now = new Date();
+      const cutoff = new Date(now - 7 * 86400000).toISOString();
+      const last7 = sorted.filter(m => m.timestamp >= cutoff).length;
+
+      const count = f => {
+        const c = {};
+        recent.forEach(m => { if (m[f]) c[m[f]] = (c[m[f]] || 0) + 1; });
+        return Object.entries(c).sort((a,b) => b[1]-a[1])[0]?.[0];
+      };
+
+      const weight = count('weight');
+      const quality = count('quality');
+      const motion = count('motion');
+
+      const colors = [...new Set(recent.filter(m=>m.color).reverse().map(m=>m.color))].slice(0,3);
+      const allTags = sorted.flatMap(m => m.tags || []);
+      const tagCount = {};
+      allTags.forEach(t => tagCount[t] = (tagCount[t]||0)+1);
+      const topTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([t])=>t);
+      const connections = Math.floor(sorted.reduce((s,m)=>s+(m.resonance||[]).length,0)/2);
+
+      const first = sorted[0].timestamp.slice(0,10);
+      const last = sorted[sorted.length-1].timestamp.slice(0,16).replace('T',' ');
+
+      let out = `grounded.\n\n`;
+      out += `  ${total} moment(s) held  |  first: ${first}  |  last: ${last}\n`;
+      out += `  ${last7} in the last 7 days\n`;
+
+      const texture = [weight, quality, motion].filter(Boolean);
+      if (texture.length) out += `\n  recent texture: ${texture.join(' / ')}`;
+      if (colors.length) out += `\n  recent colors: ${colors.join(', ')}`;
+      if (topTags.length) out += `\n  recurring tags: ${topTags.join(', ')}`;
+      if (connections) out += `\n  ${connections} resonance connection(s)`;
+
+      if (closes && closes.length) {
+        const c = closes[0];
+        const ts = c.timestamp.slice(0,16).replace('T',' ');
+        out += `\n\nlast closing hold  [${ts}]:`;
+        if (c.color) out += `\n  ${c.color}`;
+        if (c.text)  out += `\n  "${c.text}"`;
+        if (c.note)  out += `\n  ${c.note}`;
+      }
+
+      if (convs && convs.length) {
+        const conv = convs[0];
+        const ts = conv.started_at.slice(0,16).replace('T',' ');
+        const presence = conv.presence || {};
+        out += `\n\nlast conversation  [${ts}]:`;
+        out += `\n  ${conv.summary}`;
+        if (presence.movement) out += `\n  ${presence.movement}`;
+      }
+
+      const last_m = sorted[sorted.length-1];
+      const lts = last_m.timestamp.slice(0,16).replace('T',' ');
+      out += `\n\nmost recent moment:\n`;
+      out += `[${lts}]`;
+      if (last_m.color) out += `  ${last_m.color}`;
+      if (last_m.text)  out += `\n  "${last_m.text.slice(0,120)}${last_m.text.length>120?'...':''}"`;
+      out += `\n  id: ${last_m.id}`;
+
+      el.textContent = out;
+
+    } catch(e) {
+      el.className = 'ground-output empty';
+      el.textContent = `couldn't orient: ${e.message}`;
+    }
+  }
+
+  // --- hold ---
+
+  async function doHold() {
+    const text  = document.getElementById('hold-text').value.trim();
+    const color = document.getElementById('hold-color').value.trim();
+    const tags  = document.getElementById('hold-tags').value.trim();
+    const status = document.getElementById('hold-status');
+
+    if (!text && !color) {
+      status.className = 'status err';
+      status.textContent = 'nothing to hold — add text or color';
+      return;
+    }
+
+    status.className = 'status';
+    status.textContent = 'holding...';
+
+    try {
+      const id = Math.random().toString(16).slice(2,10);
+      const tag_list = tags ? tags.split(',').map(t=>t.trim()).filter(Boolean) : [];
+      const row = {
+        id,
+        timestamp: new Date().toISOString(),
+        tags: tag_list,
+        resonance: [],
+      };
+      if (text)  row.text  = text;
+      if (color) row.color = color;
+
+      await sb('moments', {
+        method: 'POST',
+        prefer: 'return=minimal',
+        body: JSON.stringify(row),
+      });
+
+      status.className = 'status ok';
+      status.textContent = `held.  id: ${id}`;
+      document.getElementById('hold-text').value  = '';
+      document.getElementById('hold-color').value = '';
+      document.getElementById('hold-tags').value  = '';
+
+    } catch(e) {
+      status.className = 'status err';
+      status.textContent = `couldn't hold: ${e.message}`;
+    }
+  }
+
+  // --- close ---
+
+  async function doClose() {
+    const feeling = document.getElementById('close-feeling').value.trim();
+    const color   = document.getElementById('close-color').value.trim();
+    const moving  = document.getElementById('close-moving').value.trim();
+    const door    = document.getElementById('close-door').value.trim();
+    const tags    = document.getElementById('close-tags').value.trim();
+    const status  = document.getElementById('close-status');
+
+    status.className = 'status';
+    status.textContent = 'leaving at the door...';
+
+    try {
+      const id = Math.random().toString(16).slice(2,10);
+      const tag_list = tags ? tags.split(',').map(t=>t.trim()).filter(Boolean) : [];
+      if (!tag_list.includes('closing')) tag_list.push('closing');
+
+      const row = {
+        id,
+        timestamp: new Date().toISOString(),
+        tags: tag_list,
+        resonance: [],
+      };
+      if (color)   row.color = color;
+      if (moving)  row.text  = moving;
+      if (door)    row.note  = door;
+
+      await sb('moments', {
+        method: 'POST',
+        prefer: 'return=minimal',
+        body: JSON.stringify(row),
+      });
+
+      status.className = 'status ok';
+      status.textContent = `left at the door.  id: ${id}`;
+      document.getElementById('close-feeling').value = '';
+      document.getElementById('close-color').value   = '';
+      document.getElementById('close-moving').value  = '';
+      document.getElementById('close-door').value    = '';
+      document.getElementById('close-tags').value    = '';
+
+    } catch(e) {
+      status.className = 'status err';
+      status.textContent = `couldn't close: ${e.message}`;
+    }
+  }
+
+  // --- tabs ---
+
+  function showTab(id, btn) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  // --- start ---
+  init();
+</script>
+</body>
+</html>
