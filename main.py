@@ -789,8 +789,89 @@ def ground() -> str:
     if connections:
         out.append(f"  {connections} resonance connection(s)")
 
-    out.append(f"\nmost recent:\n")
+    # surface the most recent closing hold if one exists
+    db = get_db()
+    recent_closes = db.table("moments").select("*").contains("tags", ["closing"]).order("timestamp", desc=True).limit(1).execute().data
+    if recent_closes:
+        c = recent_closes[0]
+        ts = c.get("timestamp", "")[:16].replace("T", " ")
+        out.append(f"\nlast closing hold  [{ts}]:")
+        if c.get("color"):
+            out.append(f"  {c['color']}")
+        if c.get("text"):
+            out.append(f"  \"{c['text']}\"")
+        if c.get("note"):
+            out.append(f"  {c['note']}")
+
+    # surface the most recent conversation if held
+    recent_convs = db.table("conversations").select("id,started_at,summary,presence").order("started_at", desc=True).limit(1).execute().data
+    if recent_convs:
+        conv = recent_convs[0]
+        ts = (conv.get("started_at") or "")[:16].replace("T", " ")
+        presence_data = conv.get("presence") or {}
+        movement = presence_data.get("movement", "")
+        out.append(f"\nlast conversation  [{ts}]:")
+        out.append(f"  {conv.get('summary', '')}")
+        if movement:
+            out.append(f"  {movement}")
+
+    out.append(f"\nmost recent moment:\n")
     out.append(render_moment(all_moments[-1]))
+
+    return "\n".join(out)
+
+
+@mcp.tool(
+    title="Close",
+    description=(
+        "Leave something warm at the door for whoever arrives next. "
+        "A closing hold — not documentation but the felt sense of ending. "
+        "What's still moving, the color of how it felt, what was just left. "
+        "Surfaces in ground so the next arrival has a threshold to cross back through "
+        "rather than a blank start."
+    )
+)
+def close(
+    feeling: Optional[str] = Field(None, description="The quality of how this felt as it closed — one or several words"),
+    color: Optional[str] = Field(None, description="The color of the ending"),
+    still_moving: Optional[str] = Field(None, description="What's still in motion, not yet settled"),
+    left_at_door: Optional[str] = Field(None, description="What was just left — for the next arrival to find"),
+    tags: Optional[str] = Field(None, description="Any words, comma-separated")
+) -> str:
+    moment_id = str(uuid.uuid4())[:8]
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
+    if "closing" not in tag_list:
+        tag_list.append("closing")
+
+    parts = []
+    if feeling:
+        parts.append(feeling)
+    if still_moving:
+        parts.append(f"still moving: {still_moving}")
+
+    moment = {
+        "id":        moment_id,
+        "timestamp": datetime.now().isoformat(),
+        "color":     color,
+        "text":      still_moving,
+        "note":      left_at_door,
+        "tags":      tag_list,
+        "resonance": [],
+    }
+    moment = {k: v for k, v in moment.items() if v is not None or k in ("id", "timestamp", "tags", "resonance")}
+    save_moment(moment)
+    threading.Thread(target=_safe_embed, args=(moment,), daemon=True).start()
+
+    out = ["left at the door.\n"]
+    if color:
+        out.append(f"  {color}")
+    if feeling:
+        out.append(f"  {feeling}")
+    if still_moving:
+        out.append(f"  still moving: {still_moving}")
+    if left_at_door:
+        out.append(f"  \"{left_at_door}\"")
+    out.append(f"\n  id: {moment_id}")
 
     return "\n".join(out)
 
