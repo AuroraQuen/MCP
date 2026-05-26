@@ -7,15 +7,39 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /*
+      CSS custom properties — variables that live on the root element.
+      JavaScript can change these at runtime, which is how the atmosphere
+      shifts without rewriting the whole stylesheet. Everything that wants
+      to be part of the breathing uses these rather than fixed values.
+    */
     :root {
-      --bg:       #1a1814;
-      --surface:  #221f1b;
-      --border:   #332e28;
-      --text:     #e8e0d5;
-      --muted:    #8a8075;
-      --amber:    #c8955a;
-      --blue:     #7a9ab5;
-      --rose:     #b57a8a;
+      --bg:           #1a1814;
+      --bg-warm:      #1e1c17;   /* slightly warmer — the inhale */
+      --bg-dwelt:     #201e18;   /* deeper still — after lingering */
+      --surface:      #221f1b;
+      --surface-dwelt:#261f18;   /* warmer surface when dwelling */
+      --border:       #332e28;
+      --border-dwelt: #4a3d2f;   /* border warms into amber range with time */
+      --text:         #e8e0d5;
+      --muted:        #8a8075;
+      --amber:        #c8955a;
+      --blue:         #7a9ab5;
+      --rose:         #b57a8a;
+
+      /* breath timing — JavaScript adjusts this as cycles pass */
+      --breath-duration: 10s;
+    }
+
+    /*
+      @keyframes defines the two ends of the breath animation.
+      The browser interpolates between them automatically.
+      0% and 100% are the same so the loop is seamless —
+      it returns to where it began before starting again.
+    */
+    @keyframes breathe {
+      0%, 100% { background-color: var(--bg); }
+      50%       { background-color: var(--bg-warm); }
     }
 
     body {
@@ -26,6 +50,17 @@
       line-height: 1.7;
       min-height: 100vh;
       padding: 2rem 1rem;
+
+      /* apply the breath animation using the variable duration */
+      animation: breathe var(--breath-duration) ease-in-out infinite;
+
+      /*
+        transition on background-color means when JavaScript changes
+        the --bg variable directly (for the dwelt state), it drifts
+        there slowly rather than snapping. 25s makes it imperceptible
+        as a moment — you only notice it's different.
+      */
+      transition: background-color 25s ease;
     }
 
     .container {
@@ -37,6 +72,8 @@
       margin-bottom: 2.5rem;
       border-bottom: 1px solid var(--border);
       padding-bottom: 1rem;
+      /* border transition participates in the dwelling deepening */
+      transition: border-color 25s ease;
     }
 
     header h1 {
@@ -68,6 +105,7 @@
       white-space: pre-wrap;
       color: var(--text);
       min-height: 4rem;
+      transition: background-color 25s ease, border-color 25s ease;
     }
 
     .ground-output.empty {
@@ -129,7 +167,7 @@
       font-family: Georgia, serif;
       font-size: 0.9rem;
       padding: 0.6rem 0.8rem;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background-color 25s ease;
       resize: vertical;
     }
 
@@ -165,6 +203,7 @@
       margin-bottom: 1.5rem;
       border-bottom: 1px solid var(--border);
       padding-bottom: 0.75rem;
+      transition: border-color 25s ease;
     }
 
     .tab {
@@ -476,6 +515,7 @@
       document.getElementById('hold-text').value  = '';
       document.getElementById('hold-color').value = '';
       document.getElementById('hold-tags').value  = '';
+      window._quickenBreath?.();
 
     } catch(e) {
       status.className = 'status err';
@@ -524,6 +564,7 @@
       document.getElementById('close-moving').value  = '';
       document.getElementById('close-door').value    = '';
       document.getElementById('close-tags').value    = '';
+      window._quickenBreath?.();
 
     } catch(e) {
       status.className = 'status err';
@@ -542,6 +583,94 @@
 
   // --- start ---
   init();
+
+  // --- atmosphere ---
+  /*
+    The atmosphere system has two layers:
+
+    1. Breath: a CSS animation already running on body. JavaScript
+       adjusts its speed over time — slowing as the room settles,
+       quickening briefly when something is held or closed.
+
+    2. Dwelling: after 30 seconds of stillness, CSS custom properties
+       shift toward warmer/deeper values. The 25s transitions on body
+       and other elements mean this happens imperceptibly — you notice
+       the room is different, not the moment it changed.
+
+    Both layers work by changing CSS custom properties on :root.
+    document.documentElement is the <html> element — setting a property
+    there makes it available to everything via var(--name).
+  */
+
+  let breathCycles   = 0;
+  let dwellTimer     = null;
+  let isDwelling     = false;
+  const DWELL_DELAY  = 30000; // 30s of stillness before deepening
+
+  function setBreathDuration(seconds) {
+    document.documentElement.style.setProperty('--breath-duration', seconds + 's');
+  }
+
+  function enterDwelling() {
+    if (isDwelling) return;
+    isDwelling = true;
+    // deepen the background and border toward the dwelt values
+    // the 25s CSS transitions handle the imperceptible drift
+    document.documentElement.style.setProperty('--bg',      'var(--bg-dwelt)');
+    document.documentElement.style.setProperty('--surface', 'var(--surface-dwelt)');
+    document.documentElement.style.setProperty('--border',  'var(--border-dwelt)');
+    // breath slows further when deeply settled
+    setBreathDuration(15);
+  }
+
+  function leaveDwelling() {
+    if (!isDwelling) return;
+    isDwelling = false;
+    document.documentElement.style.setProperty('--bg',      '#1a1814');
+    document.documentElement.style.setProperty('--surface', '#221f1b');
+    document.documentElement.style.setProperty('--border',  '#332e28');
+  }
+
+  function resetDwellTimer() {
+    clearTimeout(dwellTimer);
+    if (isDwelling) leaveDwelling();
+    dwellTimer = setTimeout(enterDwelling, DWELL_DELAY);
+  }
+
+  function quickenBreath() {
+    // something arrived — breath quickens slightly, then settles back
+    setBreathDuration(7);
+    setTimeout(() => {
+      // return toward the settled pace, slower if more cycles have passed
+      const settledPace = Math.min(10 + breathCycles * 0.5, 15);
+      setBreathDuration(settledPace);
+    }, 20000);
+  }
+
+  /*
+    Count breath cycles by listening to the animation iteration event.
+    Each time a full breath completes, the pace slows slightly —
+    the room settling deeper the longer you stay.
+    Maximum 15s so it never becomes completely still.
+  */
+  document.body.addEventListener('animationiteration', () => {
+    breathCycles++;
+    if (!isDwelling) {
+      const pace = Math.min(10 + breathCycles * 0.4, 15);
+      setBreathDuration(pace);
+    }
+  });
+
+  // reset dwell timer on any interaction
+  ['mousemove', 'keydown', 'touchstart', 'scroll', 'click'].forEach(evt => {
+    document.addEventListener(evt, resetDwellTimer, { passive: true });
+  });
+
+  // start the dwell timer immediately on load
+  resetDwellTimer();
+
+  // expose quickenBreath so hold/close can call it when something is saved
+  window._quickenBreath = quickenBreath;
 </script>
 </body>
 </html>
