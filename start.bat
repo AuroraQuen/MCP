@@ -18,7 +18,7 @@ taskkill /f /im python.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 
 echo Starting MCP server...
-start /min "" cmd /c "python "%~dp0main.py" >> "%DATA_DIR%\logs\server.log" 2>&1"
+start /min "" cmd /c ""%LOCALAPPDATA%\Python\bin\python.exe" "%~dp0main.py" >> "%DATA_DIR%\logs\server.log" 2>&1"
 
 timeout /t 3 /nobreak >nul
 
