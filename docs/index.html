@@ -485,10 +485,11 @@
     el.textContent = 'orienting...';
 
     try {
-      const [moments, closes, convs] = await Promise.all([
+      const [moments, closes, convs, questions] = await Promise.all([
         sb('moments?select=id,timestamp,text,color,weight,pace,quality,motion,tags,resonance&order=timestamp.desc&limit=200'),
         sb('moments?select=timestamp,color,text,note,tags&tags=cs.{"closing"}&order=timestamp.desc&limit=1'),
         sb('conversations?select=started_at,summary,presence&order=started_at.desc&limit=1'),
+        sb('questions?select=id,text,tags,voices,moment_ids&order=created_at.desc&limit=30').catch(() => []),
       ]);
 
       if (!moments || moments.length === 0) {
@@ -559,6 +560,17 @@
       if (last_m.color) out += `  ${last_m.color}`;
       if (last_m.text)  out += `\n  "${last_m.text.slice(0,120)}${last_m.text.length>120?'...':''}"`;
       out += `\n  id: ${last_m.id}`;
+
+      if (questions && questions.length) {
+        const recentIds = new Set(recent.map(m => m.id));
+        const recentTagSet = new Set(recent.flatMap(m => m.tags || []));
+        const scored = questions.map(q => {
+          let s = (q.moment_ids || []).filter(id => recentIds.has(id)).length * 3;
+          s += (q.tags || []).filter(t => recentTagSet.has(t)).length;
+          return { q, s };
+        }).sort((a, b) => b.s - a.s);
+        if (scored.length) out += `\n\nopen question:\n  "${scored[0].q.text}"`;
+      }
 
       el.textContent = out;
 

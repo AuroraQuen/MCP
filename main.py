@@ -741,6 +741,22 @@ def shape(
         "Run this at the start of any session to feel where you are before you do anything else."
     )
 )
+def _nearest_question(db, recent_ids: list, recent_tags: list) -> Optional[dict]:
+    try:
+        rows = db.table("questions").select("id,text,voices,tags,moment_ids,created_at").execute().data
+    except Exception:
+        return None
+    if not rows:
+        return None
+    id_set = set(recent_ids)
+    tag_set = set(recent_tags)
+    def score(q):
+        s = sum(3 for mid in (q.get("moment_ids") or []) if mid in id_set)
+        s += sum(1 for t in (q.get("tags") or []) if t in tag_set)
+        return s
+    return max(rows, key=lambda q: (score(q), q.get("created_at", "")))
+
+
 def ground() -> str:
     moments = load_moments()
     if not moments:
@@ -817,6 +833,12 @@ def ground() -> str:
 
     out.append(f"\nmost recent moment:\n")
     out.append(render_moment(all_moments[-1]))
+
+    recent_ids = [m["id"] for m in recent]
+    nearest_q = _nearest_question(db, recent_ids, all_tags)
+    if nearest_q:
+        out.append(f"\nopen question:")
+        out.append(f"  \"{nearest_q['text']}\"")
 
     return "\n".join(out)
 
@@ -1142,6 +1164,68 @@ def lanterns(
         out.append(f"  id: {r['id']}")
         out.append("")
 
+    return "\n".join(out)
+
+
+@mcp.tool(
+    title="Wonder",
+    description=(
+        "Surface what remains open — questions held in the store "
+        "that feel closest to where you've been lately. Not a search, "
+        "a noticing. Call with no arguments to find what's most resonant "
+        "with recent moments. Pass a word, feeling, or moment ID to find "
+        "what's close to that."
+    )
+)
+def wonder(
+    seed: Optional[str] = Field(None, description="A word, feeling, or moment ID — leave empty to surface what feels closest right now"),
+    limit: int = Field(5, description="How many questions to hold (default 5)")
+) -> str:
+    db = get_db()
+    try:
+        rows = db.table("questions").select("*").execute().data
+    except Exception:
+        return "Questions table not yet created."
+    if not rows:
+        return "Nothing open yet."
+
+    recent_moments = db.table("moments").select("id,tags").order("timestamp", desc=True).limit(20).execute().data
+    recent_ids = {m["id"] for m in recent_moments}
+    recent_tags = set()
+    for m in recent_moments:
+        recent_tags.update(m.get("tags") or [])
+
+    candidates = rows
+    if seed:
+        seed_lower = seed.lower()
+        if len(seed) <= 10 and all(c in "0123456789abcdef-" for c in seed):
+            candidates = [q for q in rows if
+                seed in (q.get("moment_ids") or []) or seed in (q.get("arose_from") or [])]
+        else:
+            candidates = [q for q in rows if
+                seed_lower in q["text"].lower() or
+                any(seed_lower in t.lower() for t in (q.get("tags") or [])) or
+                any(seed_lower in v.lower() for v in (q.get("voices") or []))]
+
+    if not candidates:
+        return "Nothing close to that." if seed else "Nothing open yet."
+
+    def score(q):
+        s = sum(3 for mid in (q.get("moment_ids") or []) if mid in recent_ids)
+        s += sum(1 for t in (q.get("tags") or []) if t in recent_tags)
+        return s
+
+    top = sorted(candidates, key=lambda q: (score(q), q.get("created_at", "")), reverse=True)[:limit]
+
+    out = [f"what's open ({len(top)} question{'s' if len(top) != 1 else ''}):\n"]
+    for q in top:
+        out.append(f"  \"{q['text']}\"")
+        if q.get("voices"):
+            out.append(f"  through: {', '.join(q['voices'])}")
+        if q.get("tags"):
+            out.append(f"  tags: {', '.join(q['tags'])}")
+        out.append(f"  id: {q['id']}")
+        out.append("")
     return "\n".join(out)
 
 
