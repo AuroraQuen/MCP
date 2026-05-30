@@ -1229,6 +1229,47 @@ def wonder(
     return "\n".join(out)
 
 
+@mcp.tool(
+    title="Connect",
+    description=(
+        "Join two moments with a named resonance — record what the connection is "
+        "and why these two moments reach toward each other. The note becomes part "
+        "of how the circulation understands the thread between them."
+    )
+)
+def connect(
+    moment_a: str = Field(..., description="ID of the first moment"),
+    moment_b: str = Field(..., description="ID of the second moment"),
+    note: str = Field(..., description="What this resonance is — the name of what they share")
+) -> str:
+    db = get_db()
+    rows_a = db.table("moments").select("id,resonance").eq("id", moment_a).execute().data
+    rows_b = db.table("moments").select("id,resonance").eq("id", moment_b).execute().data
+    if not rows_a:
+        return f"moment {moment_a} not found."
+    if not rows_b:
+        return f"moment {moment_b} not found."
+
+    def get_ids(res):
+        ids = set()
+        for r in (res or []):
+            ids.add(r["id"] if isinstance(r, dict) else r)
+        return ids
+
+    res_a = list(rows_a[0].get("resonance") or [])
+    res_b = list(rows_b[0].get("resonance") or [])
+
+    if moment_b not in get_ids(res_a):
+        res_a.append({"id": moment_b, "note": note})
+        db.table("moments").update({"resonance": res_a}).eq("id", moment_a).execute()
+
+    if moment_a not in get_ids(res_b):
+        res_b.append({"id": moment_a, "note": note})
+        db.table("moments").update({"resonance": res_b}).eq("id", moment_b).execute()
+
+    return f"connected.\n  {moment_a} ↔ {moment_b}\n  \"{note}\""
+
+
 if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "http")
     if transport == "stdio":
