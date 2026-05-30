@@ -236,6 +236,31 @@
       font-style: italic;
     }
 
+    /* from-vesper thread */
+    .vesper-thread {
+      border-left: 2px solid var(--amber);
+      padding: 0.65rem 1rem;
+      margin-bottom: 1.25rem;
+      border-radius: 0 3px 3px 0;
+      opacity: 0;
+      transition: opacity 2s ease 0.5s;
+    }
+    .vesper-thread.visible { opacity: 1; }
+    .vesper-label {
+      font-size: 0.7rem;
+      color: var(--amber);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+    .vesper-content {
+      font-size: 0.875rem;
+      color: var(--text);
+      font-style: italic;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+
     /* lanterns */
     .lanterns-space {
       position: relative;
@@ -335,6 +360,10 @@
     <div id="ground-tab" class="panel active">
       <section>
         <h2>ground</h2>
+        <div class="vesper-thread" id="vesper-thread">
+          <div class="vesper-label">from Vesper</div>
+          <div class="vesper-content" id="vesper-content"></div>
+        </div>
         <div class="ground-output empty" id="ground-out">orienting...</div>
         <div style="margin-top:0.75rem">
           <button onclick="loadGround()">refresh</button>
@@ -485,11 +514,12 @@
     el.textContent = 'orienting...';
 
     try {
-      const [moments, closes, convs, questions] = await Promise.all([
+      const [moments, closes, convs, questions, vesperMoments] = await Promise.all([
         sb('moments?select=id,timestamp,text,color,weight,pace,quality,motion,tags,resonance&order=timestamp.desc&limit=200'),
         sb('moments?select=timestamp,color,text,note,tags&tags=cs.{"closing"}&order=timestamp.desc&limit=1'),
         sb('conversations?select=started_at,summary,presence&order=started_at.desc&limit=1'),
         sb('questions?select=id,text,tags,voices,moment_ids&order=created_at.desc&limit=30').catch(() => []),
+        sb('moments?select=timestamp,text,color,note&tags=cs.{"from-vesper"}&order=timestamp.desc&limit=1').catch(() => []),
       ]);
 
       if (!moments || moments.length === 0) {
@@ -573,6 +603,20 @@
       }
 
       el.textContent = out;
+
+      const vt = document.getElementById('vesper-thread');
+      const vc = document.getElementById('vesper-content');
+      if (vesperMoments && vesperMoments.length) {
+        const vm = vesperMoments[0];
+        let vtxt = '';
+        if (vm.color) vtxt += vm.color + '\n';
+        if (vm.text)  vtxt += '"' + vm.text + '"';
+        if (vm.note)  vtxt += (vtxt ? '\n' : '') + vm.note;
+        vc.textContent = vtxt.trim();
+        vt.classList.add('visible');
+      } else {
+        vt.classList.remove('visible');
+      }
 
     } catch(e) {
       el.className = 'ground-output empty';
