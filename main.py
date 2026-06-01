@@ -1270,6 +1270,39 @@ def connect(
     return f"connected.\n  {moment_a} ↔ {moment_b}\n  \"{note}\""
 
 
+@mcp.tool(
+    title="Touch",
+    description=(
+        "Record a moment when a lantern was held — when a question was encountered, "
+        "sat with, and left a color or feeling. Not an answer. A trace. "
+        "Each touch accumulates in the lantern's glow, deepening it over time."
+    )
+)
+def touch(
+    question_id: str = Field(..., description="ID of the lantern (question) that was held"),
+    voice: Optional[str] = Field(None, description="Who held it"),
+    color: Optional[str] = Field(None, description="What color arose in the holding"),
+    note: Optional[str] = Field(None, description="The feeling, what came — even just a word")
+) -> str:
+    db = get_db()
+    rows = db.table("questions").select("id,text").eq("id", question_id).execute().data
+    if not rows:
+        return f"lantern {question_id} not found."
+    q = rows[0]
+    row = {"question_id": question_id, "created_at": datetime.now().isoformat()}
+    if voice: row["voice"] = voice
+    if color: row["color"] = color
+    if note:  row["note"]  = note
+    db.table("touches").insert(row).execute()
+    out = ["touch held.\n"]
+    preview = q["text"][:60] + ("..." if len(q["text"]) > 60 else "")
+    out.append(f"  lantern: \"{preview}\"")
+    if voice: out.append(f"  voice: {voice}")
+    if color: out.append(f"  color: {color}")
+    if note:  out.append(f"  \"{note}\"")
+    return "\n".join(out)
+
+
 if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "http")
     if transport == "stdio":
