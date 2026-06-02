@@ -145,7 +145,7 @@ def _call_llm(full_context: str) -> str:
     elif GEMINI_KEY and _genai:
         client   = _genai.Client(api_key=GEMINI_KEY)
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=full_context,
             config=_genai_types.GenerateContentConfig(
                 system_instruction=HARMONIA_ORIENTATION,
