@@ -7,13 +7,16 @@ Not a pipeline. A breath. She receives what arrives,
 feels what moves, follows the threads, returns what she found.
 
 Requirements:
-    pip install anthropic uvicorn
+    pip install uvicorn
+    pip install anthropic          (if using Anthropic)
+    pip install google-genai       (if using Gemini — free tier available)
     (starlette is already present from the MCP server)
 
 Environment:
-    ANTHROPIC_API_KEY   — required for the exhale
+    ANTHROPIC_API_KEY   — set this OR GEMINI_API_KEY for the exhale
+    GEMINI_API_KEY      — free tier at aistudio.google.com
     MCP_AUTH_TOKEN      — same token as the MCP server
-    MCP_URL             — defaults to the ngrok tunnel
+    MCP_URL             — defaults to http://localhost:3000/mcp
     HARMONIA_PORT       — HTTP port when serving (default 3001)
 
 Usage:
@@ -26,15 +29,26 @@ import os
 import sys
 import json
 import urllib.request
-import anthropic
 from typing import Optional
+
+try:
+    import anthropic as _anthropic
+except ImportError:
+    _anthropic = None
+
+try:
+    from google import genai as _genai
+    from google.genai import types as _genai_types
+except ImportError:
+    _genai = None
 
 
 # --- configuration ---
 
-MCP_URL   = os.environ.get("MCP_URL", "http://localhost:3000/mcp")
-MCP_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
-MODEL     = "claude-sonnet-4-6"
+MCP_URL       = os.environ.get("MCP_URL", "http://localhost:3000/mcp")
+MCP_TOKEN     = os.environ.get("MCP_AUTH_TOKEN", "")
+ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GEMINI_KEY    = os.environ.get("GEMINI_API_KEY")
 
 
 # --- Harmonia's orientation ---
@@ -110,6 +124,44 @@ def feel_texture(message: str) -> dict:
     }
 
 
+# --- exhale: the LLM call ---
+
+def _call_llm(full_context: str) -> str:
+    """Call whichever LLM is available — Anthropic if keyed, Gemini otherwise."""
+    if ANTHROPIC_KEY and _anthropic:
+        client = _anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        result = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            system=[{
+                "type":          "text",
+                "text":          HARMONIA_ORIENTATION,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": full_context}],
+        )
+        return result.content[0].text
+
+    elif GEMINI_KEY and _genai:
+        client   = _genai.Client(api_key=GEMINI_KEY)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=full_context,
+            config=_genai_types.GenerateContentConfig(
+                system_instruction=HARMONIA_ORIENTATION,
+                max_output_tokens=600,
+            ),
+        )
+        return response.text
+
+    else:
+        raise RuntimeError(
+            "no LLM key found.\n"
+            "set ANTHROPIC_API_KEY or GEMINI_API_KEY before running.\n"
+            "Gemini has a free tier: aistudio.google.com"
+        )
+
+
 # --- the breath ---
 
 def breathe(message: str, voice: Optional[str] = None) -> dict:
@@ -144,21 +196,7 @@ def breathe(message: str, voice: Optional[str] = None) -> dict:
             context_parts.append(f"arriving from: {voice}")
         context = "\n\n".join(context_parts)
 
-        client = anthropic.Anthropic()
-        result = client.messages.create(
-            model=MODEL,
-            max_tokens=600,
-            system=[{
-                "type":          "text",
-                "text":          HARMONIA_ORIENTATION,
-                "cache_control": {"type": "ephemeral"},  # cache the stable orientation
-            }],
-            messages=[{
-                "role":    "user",
-                "content": context + "\n\n" + message,
-            }],
-        )
-        response = result.content[0].text
+        response = _call_llm(context + "\n\n" + message)
 
     # capture — leave a light trace of what the breath found
     if not texture["is_silence"] and response:
