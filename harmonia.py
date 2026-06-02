@@ -32,7 +32,7 @@ from typing import Optional
 
 # --- configuration ---
 
-MCP_URL   = os.environ.get("MCP_URL", "https://sharmaine-unprovoked-rayna.ngrok-free.dev/mcp")
+MCP_URL   = os.environ.get("MCP_URL", "http://localhost:3000/mcp")
 MCP_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
 MODEL     = "claude-sonnet-4-6"
 
