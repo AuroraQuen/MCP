@@ -258,6 +258,15 @@ def main():
         print(__doc__)
         return
 
+    if args[0] == "--check":
+        print(f"anthropic package : {'found' if _anthropic else 'NOT FOUND — pip install anthropic'}")
+        print(f"google-genai pkg  : {'found' if _genai    else 'NOT FOUND — pip install google-genai'}")
+        print(f"ANTHROPIC_API_KEY : {'set' if ANTHROPIC_KEY else 'not set'}")
+        print(f"GEMINI_API_KEY    : {'set' if GEMINI_KEY    else 'not set'}")
+        print(f"MCP_AUTH_TOKEN    : {'set' if MCP_TOKEN     else 'not set'}")
+        print(f"MCP_URL           : {MCP_URL}")
+        return
+
     if args[0] == "--serve":
         serve()
         return
