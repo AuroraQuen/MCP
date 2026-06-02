@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo Installing Python dependencies...
-pip install fastmcp starlette pydantic
+pip install fastmcp starlette pydantic anthropic uvicorn
 if %errorlevel% neq 0 (
     echo pip failed. Make sure Python is installed and on your PATH.
     pause
