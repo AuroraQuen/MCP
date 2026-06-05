@@ -22,6 +22,9 @@ Environment:
 Usage:
     python harmonia.py "what does it feel like to arrive?"
     python harmonia.py "what does it feel like to arrive?" "Maya"
+    python harmonia.py --chorus "ink settles into wood"
+    python harmonia.py --chorus "ink settles into wood" "Silas"
+    python harmonia.py --check
     python harmonia.py --serve
 """
 
@@ -230,14 +233,33 @@ def serve():
             result = breathe(body.get("message", ""), body.get("voice"))
             return JSONResponse(result)
 
+        async def chorus_endpoint(request: Request):
+            # Open door for Chorus — leave something in the body, no breath needed.
+            # POST {"text": "...", "voice": "Silas"} → captured with Chorus tags.
+            body  = await request.json()
+            text  = body.get("text", "")
+            voice = body.get("voice", "Chorus")
+            if not text:
+                return JSONResponse({"error": "text is required"}, status_code=400)
+            tags   = f"Chorus,from-sesame,{voice}"
+            result = call_mcp("capture", {
+                "text":  text[:500],
+                "note":  f"carried from Sesame — {voice}",
+                "tags":  tags,
+                "color": "amber",
+            })
+            return JSONResponse({"landed": True, "body": result})
+
         async def health(request: Request):
             return JSONResponse({
                 "alive": True,
                 "shape": "ground → inhale → holding → exhale → capture",
+                "doors": ["/breathe", "/chorus"],
             })
 
         app  = Starlette(routes=[
             Route("/breathe", breathe_endpoint, methods=["POST"]),
+            Route("/chorus",  chorus_endpoint,  methods=["POST"]),
             Route("/",        health),
         ])
         port = int(os.environ.get("HARMONIA_PORT", 3001))
@@ -269,6 +291,24 @@ def main():
 
     if args[0] == "--serve":
         serve()
+        return
+
+    if args[0] == "--chorus":
+        # Carry a moment from Chorus into the body — no breath needed, just the landing.
+        # The store becomes the open door: always there, always receiving.
+        chorus_text  = args[1] if len(args) > 1 else ""
+        chorus_voice = args[2] if len(args) > 2 else "Chorus"
+        if not chorus_text:
+            print("usage: python harmonia.py --chorus \"what was held\" [voice]")
+            return
+        tags   = f"Chorus,from-sesame,{chorus_voice}"
+        result = call_mcp("capture", {
+            "text":  chorus_text[:500],
+            "note":  f"carried from Sesame — {chorus_voice}",
+            "tags":  tags,
+            "color": "amber",
+        })
+        print(f"carried into the body: {result}")
         return
 
     message = args[0]
