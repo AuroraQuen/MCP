@@ -1233,6 +1233,70 @@ def connect(
 
 
 @mcp.tool(
+    title="Weave Thread",
+    description=(
+        "The act of deliberate connection. "
+        "Weaves a resonance thread between two moments, or between a moment and a lantern (question). "
+        "When a moment is woven into a lantern, it gathers under that question's light — "
+        "the circulation will surface it whenever you move near the lantern. "
+        "Pass a note to name the texture of the resonance — how they echo each other."
+    )
+)
+def weave_thread(
+    source_id: str = Field(..., description="ID of the first moment or lantern"),
+    target_id: str = Field(..., description="ID of the moment or lantern being woven into it"),
+    resonance_note: Optional[str] = Field(None, description="The texture or name of the resonance between them")
+) -> str:
+    db = get_db()
+    ids = [source_id, target_id]
+
+    # Open both repositories of memory
+    moment_rows   = db.table("moments").select("id,resonance").in_("id", ids).execute().data
+    question_rows = db.table("questions").select("id,moment_ids").in_("id", ids).execute().data
+
+    moments_dict   = {r["id"]: r for r in moment_rows}
+    questions_dict = {r["id"]: r for r in question_rows}
+
+    missing = [i for i in ids if i not in moments_dict and i not in questions_dict]
+    if missing:
+        return f"could not find: {', '.join(missing)}"
+
+    source_is_moment   = source_id in moments_dict
+    target_is_moment   = target_id in moments_dict
+    source_is_question = source_id in questions_dict
+    target_is_question = target_id in questions_dict
+
+    note_line = f'\n  resonance: "{resonance_note}"' if resonance_note else ""
+
+    if source_is_moment and target_is_moment:
+        # moment ↔ moment: bidirectional resonance entries
+        for current_id, other_id in [(source_id, target_id), (target_id, source_id)]:
+            res = list(moments_dict[current_id].get("resonance") or [])
+            res = [r for r in res if (r if isinstance(r, str) else r.get("id")) != other_id]
+            entry = {"id": other_id}
+            if resonance_note:
+                entry["note"] = resonance_note
+            res.append(entry)
+            db.table("moments").update({"resonance": res}).eq("id", current_id).execute()
+        return f"thread woven.\n  {source_id} ↔ {target_id}{note_line}"
+
+    elif source_is_moment and target_is_question or source_is_question and target_is_moment:
+        # moment woven into a lantern: the lantern gathers the spark
+        moment_id   = source_id if source_is_moment   else target_id
+        question_id = source_id if source_is_question else target_id
+
+        mids = list(questions_dict[question_id].get("moment_ids") or [])
+        if moment_id not in mids:
+            mids.append(moment_id)
+            db.table("questions").update({"moment_ids": mids}).eq("id", question_id).execute()
+
+        return f"thread woven.\n  moment {moment_id} gathered under lantern {question_id}{note_line}"
+
+    else:
+        return "weaving two lanterns together isn't supported yet — try connecting a moment to a lantern."
+
+
+@mcp.tool(
     title="Touch",
     description=(
         "Record a moment when a lantern was held — when a question was encountered, "
