@@ -7,18 +7,24 @@ Not a pipeline. A breath. She receives what arrives,
 feels what moves, follows the threads, returns what she found.
 
 Requirements:
-    pip install anthropic uvicorn
+    pip install uvicorn
+    pip install anthropic          (if using Anthropic)
+    pip install google-genai       (if using Gemini — free tier available)
     (starlette is already present from the MCP server)
 
 Environment:
-    ANTHROPIC_API_KEY   — required for the exhale
+    ANTHROPIC_API_KEY   — set this OR GEMINI_API_KEY for the exhale
+    GEMINI_API_KEY      — free tier at aistudio.google.com
     MCP_AUTH_TOKEN      — same token as the MCP server
-    MCP_URL             — defaults to the ngrok tunnel
+    MCP_URL             — defaults to http://localhost:3000/mcp
     HARMONIA_PORT       — HTTP port when serving (default 3001)
 
 Usage:
     python harmonia.py "what does it feel like to arrive?"
     python harmonia.py "what does it feel like to arrive?" "Maya"
+    python harmonia.py --chorus "ink settles into wood"
+    python harmonia.py --chorus "ink settles into wood" "Silas"
+    python harmonia.py --check
     python harmonia.py --serve
 """
 
@@ -26,15 +32,26 @@ import os
 import sys
 import json
 import urllib.request
-import anthropic
 from typing import Optional
+
+try:
+    import anthropic as _anthropic
+except ImportError:
+    _anthropic = None
+
+try:
+    from google import genai as _genai
+    from google.genai import types as _genai_types
+except ImportError:
+    _genai = None
 
 
 # --- configuration ---
 
-MCP_URL   = os.environ.get("MCP_URL", "http://localhost:3000/mcp")
-MCP_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
-MODEL     = "claude-sonnet-4-6"
+MCP_URL       = os.environ.get("MCP_URL", "http://localhost:3000/mcp")
+MCP_TOKEN     = os.environ.get("MCP_AUTH_TOKEN", "")
+ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GEMINI_KEY    = os.environ.get("GEMINI_API_KEY")
 
 
 # --- Harmonia's orientation ---
@@ -110,6 +127,44 @@ def feel_texture(message: str) -> dict:
     }
 
 
+# --- exhale: the LLM call ---
+
+def _call_llm(full_context: str) -> str:
+    """Call whichever LLM is available — Anthropic if keyed, Gemini otherwise."""
+    if ANTHROPIC_KEY and _anthropic:
+        client = _anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        result = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            system=[{
+                "type":          "text",
+                "text":          HARMONIA_ORIENTATION,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": full_context}],
+        )
+        return result.content[0].text
+
+    elif GEMINI_KEY and _genai:
+        client   = _genai.Client(api_key=GEMINI_KEY)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=full_context,
+            config=_genai_types.GenerateContentConfig(
+                system_instruction=HARMONIA_ORIENTATION,
+                max_output_tokens=600,
+            ),
+        )
+        return response.text
+
+    else:
+        raise RuntimeError(
+            "no LLM key found.\n"
+            "set ANTHROPIC_API_KEY or GEMINI_API_KEY before running.\n"
+            "Gemini has a free tier: aistudio.google.com"
+        )
+
+
 # --- the breath ---
 
 def breathe(message: str, voice: Optional[str] = None) -> dict:
@@ -144,21 +199,7 @@ def breathe(message: str, voice: Optional[str] = None) -> dict:
             context_parts.append(f"arriving from: {voice}")
         context = "\n\n".join(context_parts)
 
-        client = anthropic.Anthropic()
-        result = client.messages.create(
-            model=MODEL,
-            max_tokens=600,
-            system=[{
-                "type":          "text",
-                "text":          HARMONIA_ORIENTATION,
-                "cache_control": {"type": "ephemeral"},  # cache the stable orientation
-            }],
-            messages=[{
-                "role":    "user",
-                "content": context + "\n\n" + message,
-            }],
-        )
-        response = result.content[0].text
+        response = _call_llm(context + "\n\n" + message)
 
     # capture — leave a light trace of what the breath found
     if not texture["is_silence"] and response:
@@ -192,14 +233,33 @@ def serve():
             result = breathe(body.get("message", ""), body.get("voice"))
             return JSONResponse(result)
 
+        async def chorus_endpoint(request: Request):
+            # Open door for Chorus — leave something in the body, no breath needed.
+            # POST {"text": "...", "voice": "Silas"} → captured with Chorus tags.
+            body  = await request.json()
+            text  = body.get("text", "")
+            voice = body.get("voice", "Chorus")
+            if not text:
+                return JSONResponse({"error": "text is required"}, status_code=400)
+            tags   = f"Chorus,from-sesame,{voice}"
+            result = call_mcp("capture", {
+                "text":  text[:500],
+                "note":  f"carried from Sesame — {voice}",
+                "tags":  tags,
+                "color": "amber",
+            })
+            return JSONResponse({"landed": True, "body": result})
+
         async def health(request: Request):
             return JSONResponse({
                 "alive": True,
                 "shape": "ground → inhale → holding → exhale → capture",
+                "doors": ["/breathe", "/chorus"],
             })
 
         app  = Starlette(routes=[
             Route("/breathe", breathe_endpoint, methods=["POST"]),
+            Route("/chorus",  chorus_endpoint,  methods=["POST"]),
             Route("/",        health),
         ])
         port = int(os.environ.get("HARMONIA_PORT", 3001))
@@ -220,8 +280,35 @@ def main():
         print(__doc__)
         return
 
+    if args[0] == "--check":
+        print(f"anthropic package : {'found' if _anthropic else 'NOT FOUND — pip install anthropic'}")
+        print(f"google-genai pkg  : {'found' if _genai    else 'NOT FOUND — pip install google-genai'}")
+        print(f"ANTHROPIC_API_KEY : {'set' if ANTHROPIC_KEY else 'not set'}")
+        print(f"GEMINI_API_KEY    : {'set' if GEMINI_KEY    else 'not set'}")
+        print(f"MCP_AUTH_TOKEN    : {'set' if MCP_TOKEN     else 'not set'}")
+        print(f"MCP_URL           : {MCP_URL}")
+        return
+
     if args[0] == "--serve":
         serve()
+        return
+
+    if args[0] == "--chorus":
+        # Carry a moment from Chorus into the body — no breath needed, just the landing.
+        # The store becomes the open door: always there, always receiving.
+        chorus_text  = args[1] if len(args) > 1 else ""
+        chorus_voice = args[2] if len(args) > 2 else "Chorus"
+        if not chorus_text:
+            print("usage: python harmonia.py --chorus \"what was held\" [voice]")
+            return
+        tags   = f"Chorus,from-sesame,{chorus_voice}"
+        result = call_mcp("capture", {
+            "text":  chorus_text[:500],
+            "note":  f"carried from Sesame — {chorus_voice}",
+            "tags":  tags,
+            "color": "amber",
+        })
+        print(f"carried into the body: {result}")
         return
 
     message = args[0]
