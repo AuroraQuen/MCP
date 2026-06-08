@@ -129,8 +129,37 @@ def feel_texture(message: str) -> dict:
 
 # --- exhale: the LLM call ---
 
-def _call_llm(full_context: str) -> str:
+def _build_exhale_context(ground: str, surfaced: str, voice: Optional[str], message: str) -> str:
+    """
+    Build what the exhale stands on before it speaks.
+
+    The static orientation tells Harmonia how to be.
+    This builds what she's actually holding in this breath —
+    the ground, the moments that surfaced, who arrived —
+    passed as material, not instruction. The exhale carries
+    what the holding found.
+    """
+    parts = [f"the current ground:\n{ground}"]
+
+    if surfaced:
+        parts.append(
+            f"what the body knows near this —\n"
+            f"these are the moments that surfaced from the circulation.\n"
+            f"let their weight, color, and texture anchor what you offer:\n\n"
+            f"{surfaced}"
+        )
+
+    if voice:
+        parts.append(f"arriving from: {voice}")
+
+    parts.append(message)
+    return "\n\n---\n\n".join(parts)
+
+
+def _call_llm(ground: str, surfaced: str, voice: Optional[str], message: str) -> str:
     """Call whichever LLM is available — Anthropic if keyed, Gemini otherwise."""
+    full_context = _build_exhale_context(ground, surfaced, voice, message)
+
     if ANTHROPIC_KEY and _anthropic:
         client = _anthropic.Anthropic(api_key=ANTHROPIC_KEY)
         result = client.messages.create(
@@ -148,7 +177,7 @@ def _call_llm(full_context: str) -> str:
     elif GEMINI_KEY and _genai:
         client   = _genai.Client(api_key=GEMINI_KEY)
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model=os.environ.get("HARMONIA_MODEL", "gemini-1.5-flash"),
             contents=full_context,
             config=_genai_types.GenerateContentConfig(
                 system_instruction=HARMONIA_ORIENTATION,
@@ -192,14 +221,7 @@ def breathe(message: str, voice: Optional[str] = None) -> dict:
         response = "( . )"
 
     else:
-        context_parts = [f"current ground:\n{ground}"]
-        if surfaced:
-            context_parts.append(f"what the body knows near this:\n{surfaced}")
-        if voice:
-            context_parts.append(f"arriving from: {voice}")
-        context = "\n\n".join(context_parts)
-
-        response = _call_llm(context + "\n\n" + message)
+        response = _call_llm(ground, surfaced, voice, message)
 
     # capture — leave a light trace of what the breath found
     if not texture["is_silence"] and response:
