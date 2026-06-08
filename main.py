@@ -535,44 +535,6 @@ def trace(
     return "\n".join(lines)
 
 
-@mcp.tool(
-    title="Connect",
-    description=(
-        "Mark two moments as resonant with each other — not because they are similar "
-        "but because something in one echoes something in the other. "
-        "The connection is bidirectional and stored with an optional note about what the resonance is."
-    )
-)
-def connect(
-    moment_a: str = Field(..., description="ID of the first moment"),
-    moment_b: str = Field(..., description="ID of the second moment"),
-    note: Optional[str] = Field(None, description="What the resonance is, if you can name it")
-) -> str:
-    moments = load_moments()
-    if moment_a not in moments:
-        return f"Moment '{moment_a}' not found."
-    if moment_b not in moments:
-        return f"Moment '{moment_b}' not found."
-
-    entry = {"id": moment_b, "note": note} if note else moment_b
-    if moment_b not in [r if isinstance(r, str) else r["id"] for r in moments[moment_a].get("resonance", [])]:
-        moments[moment_a].setdefault("resonance", []).append(entry)
-
-    entry_rev = {"id": moment_a, "note": note} if note else moment_a
-    if moment_a not in [r if isinstance(r, str) else r["id"] for r in moments[moment_b].get("resonance", [])]:
-        moments[moment_b].setdefault("resonance", []).append(entry_rev)
-
-    update_resonance(moment_a, moments[moment_a]["resonance"])
-    update_resonance(moment_b, moments[moment_b]["resonance"])
-
-    out = [f"connected: {moment_a} ↔ {moment_b}"]
-    if note:
-        out.append(f"resonance: \"{note}\"")
-    out.append("")
-    out.append(render_moment(moments[moment_a], brief=True))
-    out.append("")
-    out.append(render_moment(moments[moment_b], brief=True))
-    return "\n".join(out)
 
 
 @mcp.tool(

@@ -1217,7 +1217,10 @@
       lanternElements.push(el);
     });
 
-    document.addEventListener('click', () => closeLanternCard(), { once: false });
+    document.addEventListener('click', (e) => {
+      const card = document.getElementById('lantern-card');
+      if (!card.contains(e.target)) closeLanternCard();
+    });
 
     startLanternAnimation();
   }
