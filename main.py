@@ -26,8 +26,12 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if AUTH_TOKEN:
             if request.url.path not in ("/health",):
-                auth = request.headers.get("Authorization", "")
-                if not auth.startswith("Bearer ") or auth[len("Bearer "):] != AUTH_TOKEN:
+                auth   = request.headers.get("Authorization", "")
+                token  = auth[len("Bearer "):] if auth.startswith("Bearer ") else ""
+                # also accept ?token= query param (needed for SSE clients like LM Studio)
+                if not token:
+                    token = request.query_params.get("token", "")
+                if token != AUTH_TOKEN:
                     return Response("Unauthorized", status_code=401)
         return await call_next(request)
 
