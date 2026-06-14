@@ -34,6 +34,23 @@ import json
 import urllib.request
 from typing import Optional
 
+
+def _load_env():
+    """Load .env from the same directory as this file, if present."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+_load_env()
+
+
 try:
     import anthropic as _anthropic
 except ImportError:
