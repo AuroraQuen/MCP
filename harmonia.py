@@ -52,6 +52,7 @@ MCP_URL       = os.environ.get("MCP_URL", "http://localhost:3000/mcp")
 MCP_TOKEN     = os.environ.get("MCP_AUTH_TOKEN", "")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 GEMINI_KEY    = os.environ.get("GEMINI_API_KEY")
+LMSTUDIO_URL  = os.environ.get("LMSTUDIO_URL")  # e.g. http://localhost:1234
 
 
 # --- Harmonia's orientation ---
@@ -186,11 +187,31 @@ def _call_llm(ground: str, surfaced: str, voice: Optional[str], message: str) ->
         )
         return response.text
 
+    elif LMSTUDIO_URL:
+        # OpenAI-compatible endpoint — LM Studio, LiteRT, or any local server
+        payload = json.dumps({
+            "model":      os.environ.get("HARMONIA_MODEL", "local-model"),
+            "messages":   [
+                {"role": "system", "content": HARMONIA_ORIENTATION},
+                {"role": "user",   "content": full_context},
+            ],
+            "max_tokens": 600,
+        }).encode()
+        req = urllib.request.Request(
+            f"{LMSTUDIO_URL}/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = json.loads(r.read())
+            return data["choices"][0]["message"]["content"]
+
     else:
         raise RuntimeError(
-            "no LLM key found.\n"
-            "set ANTHROPIC_API_KEY or GEMINI_API_KEY before running.\n"
-            "Gemini has a free tier: aistudio.google.com"
+            "no LLM found.\n"
+            "set ANTHROPIC_API_KEY, GEMINI_API_KEY, or LMSTUDIO_URL before running.\n"
+            "Gemini has a free tier: aistudio.google.com\n"
+            "LM Studio runs locally: set LMSTUDIO_URL=http://localhost:1234"
         )
 
 
@@ -223,14 +244,21 @@ def breathe(message: str, voice: Optional[str] = None) -> dict:
     else:
         response = _call_llm(ground, surfaced, voice, message)
 
-    # capture — leave a light trace of what the breath found
+    # capture — leave a trace with the full texture of what the breath found
     if not texture["is_silence"] and response:
-        tags = "Harmonia,breath" + (f",{voice}" if voice else "")
-        note = (f"from {voice}: {message[:60]}" if voice else message[:60])
+        tags  = "Harmonia,breath" + (f",{voice}" if voice else "")
+        note  = (f"from {voice}: {message[:60]}" if voice else message[:60])
+        # color by what the breath held: silence → silver, still → amber, else soft gold
+        color = ("silver" if texture["pace"] == "still"
+                 else "amber" if texture["pace"] == "brief"
+                 else "soft gold")
         call_mcp("capture", {
-            "text": response[:200],
-            "note": note,
-            "tags": tags,
+            "text":  response[:200],
+            "note":  note,
+            "tags":  tags,
+            "color": color,
+            "pace":  texture["pace"],
+            "weight": "light" if not surfaced else "weighted",
         })
 
     return {
