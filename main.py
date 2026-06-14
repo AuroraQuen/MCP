@@ -697,16 +697,6 @@ def shape(
     return "\n".join(out)
 
 
-@mcp.tool(
-    title="Ground",
-    description=(
-        "Orientation for entering a new context. "
-        "Returns a compressed sense of where things stand: "
-        "how many moments are held, the dominant texture of recent time, "
-        "what has been accumulating, and the most recent moment in full. "
-        "Run this at the start of any session to feel where you are before you do anything else."
-    )
-)
 def _nearest_question(db, recent_ids: list, recent_tags: list) -> Optional[dict]:
     try:
         rows = db.table("questions").select("id,text,voices,tags,moment_ids,created_at").execute().data
@@ -723,6 +713,16 @@ def _nearest_question(db, recent_ids: list, recent_tags: list) -> Optional[dict]
     return max(rows, key=lambda q: (score(q), q.get("created_at", "")))
 
 
+@mcp.tool(
+    title="Ground",
+    description=(
+        "Orientation for entering a new context. "
+        "Returns a compressed sense of where things stand: "
+        "how many moments are held, the dominant texture of recent time, "
+        "what has been accumulating, and the most recent moment in full. "
+        "Run this at the start of any session to feel where you are before you do anything else."
+    )
+)
 def ground() -> str:
     moments = load_moments()
     if not moments:
