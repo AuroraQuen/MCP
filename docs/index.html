@@ -227,6 +227,39 @@
     .panel { display: none; }
     .panel.active { display: block; }
 
+    .nurture-result {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.65rem 0.9rem;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      margin-bottom: 0.4rem;
+    }
+    .nurture-result:hover { border-color: var(--amber); }
+    .nurture-result-ts { font-size: 0.72rem; color: var(--muted); }
+    .nurture-result-preview { font-size: 0.88rem; margin-top: 0.2rem; }
+
+    .nurture-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.25rem;
+      margin-top: 1rem;
+    }
+    .nurture-card-meta { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .nurture-card-color { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.4rem; font-style: italic; }
+    .nurture-card-text { font-size: 0.92rem; margin-bottom: 0.75rem; white-space: pre-wrap; }
+    .nurture-card-note { font-size: 0.83rem; color: var(--muted); font-style: italic; margin-bottom: 0.75rem; }
+    .nurture-card-tags { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .nurture-texture { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.75rem; }
+    .nurture-texture-row { font-size: 0.8rem; }
+    .nurture-texture-row span:first-child { color: var(--muted); letter-spacing: 0.05em; margin-right: 0.4rem; }
+    .nurture-connections { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .nurture-conn-link { cursor: pointer; text-decoration: underline; color: var(--muted); }
+    .nurture-conn-link:hover { color: var(--amber); }
+    .nurture-deepen { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; }
+
     .config-note {
       font-size: 0.8rem;
       color: var(--muted);
@@ -468,6 +501,7 @@
       <button class="tab" onclick="showTab('close-tab', this)">close</button>
       <button class="tab" onclick="showTab('lanterns-tab', this)">lanterns</button>
       <button class="tab" onclick="showTab('carry-tab', this)">carry</button>
+      <button class="tab" onclick="showTab('nurture-tab', this)">nurture</button>
     </div>
 
     <!-- ground -->
@@ -559,6 +593,18 @@
           <button onclick="copyCarry()">copy to carry</button>
         </div>
         <div class="status" id="carry-status"></div>
+      </section>
+    </div>
+
+    <!-- nurture -->
+    <div id="nurture-tab" class="panel">
+      <section>
+        <h2>nurture</h2>
+        <div class="field">
+          <input type="text" id="nurture-search" placeholder="search by word, color, or tag — empty to see recent" oninput="debouncedNurture()">
+        </div>
+        <div id="nurture-results"></div>
+        <div id="nurture-card" class="nurture-card" style="display:none"></div>
       </section>
     </div>
 
@@ -837,7 +883,133 @@
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     btn.classList.add('active');
-    if (id === 'carry-tab') generateCarry();
+    if (id === 'carry-tab')   generateCarry();
+    if (id === 'nurture-tab') nurtureSearch();
+  }
+
+  // --- nurture ---
+
+  let _nurtureTimer = null;
+  let _nurtureActive = null;
+
+  function debouncedNurture() {
+    clearTimeout(_nurtureTimer);
+    _nurtureTimer = setTimeout(nurtureSearch, 350);
+  }
+
+  async function nurtureSearch() {
+    const q       = document.getElementById('nurture-search')?.value.trim() || '';
+    const results = document.getElementById('nurture-results');
+    if (!results) return;
+    results.innerHTML = '';
+
+    try {
+      let path = 'moments?select=id,timestamp,text,color,weight,pace,quality,motion,sound,note,tags,resonance&order=timestamp.desc&limit=8';
+      if (q) {
+        // try text match first, fallback is handled by showing what returns
+        path = `moments?select=id,timestamp,text,color,weight,pace,quality,motion,sound,note,tags,resonance&or=(text.ilike.*${encodeURIComponent(q)}*,color.ilike.*${encodeURIComponent(q)}*,note.ilike.*${encodeURIComponent(q)}*)&order=timestamp.desc&limit=8`;
+      }
+      const rows = await sb(path);
+      if (!rows || !rows.length) {
+        results.innerHTML = '<div class="status">nothing found</div>';
+        return;
+      }
+      rows.forEach(m => {
+        const el  = document.createElement('div');
+        el.className = 'nurture-result';
+        const ts  = m.timestamp.slice(0,16).replace('T',' ');
+        const pre = [m.color, m.text?.slice(0,70)].filter(Boolean).join(' — ') || '(untexted)';
+        el.innerHTML = `<div class="nurture-result-ts">${ts}</div><div class="nurture-result-preview">${pre}</div>`;
+        el.onclick = () => openNurtureCard(m);
+        results.appendChild(el);
+      });
+    } catch(e) {
+      results.innerHTML = `<div class="status err">${e.message}</div>`;
+    }
+  }
+
+  function openNurtureCard(m) {
+    _nurtureActive = m;
+    const card = document.getElementById('nurture-card');
+    card.style.display = 'block';
+    const ts = m.timestamp.slice(0,16).replace('T',' ');
+    const TEXTURE = ['weight','pace','quality','motion','sound'];
+    const presentTexture = TEXTURE.filter(f => m[f]);
+    const conns = (m.resonance || []).slice(0, 5);
+
+    card.innerHTML = `
+      <div class="nurture-card-meta">${ts} &nbsp;·&nbsp; ${m.id}</div>
+      ${m.color ? `<div class="nurture-card-color">${m.color}</div>` : ''}
+      ${m.text  ? `<div class="nurture-card-text">&ldquo;${m.text}&rdquo;</div>` : ''}
+      ${m.note  ? `<div class="nurture-card-note">${m.note}</div>` : ''}
+      ${(m.tags||[]).length ? `<div class="nurture-card-tags">${m.tags.join(', ')}</div>` : ''}
+      ${presentTexture.length ? `<div class="nurture-texture">${presentTexture.map(f =>
+        `<div class="nurture-texture-row"><span>${f}</span><span>${m[f]}</span></div>`
+      ).join('')}</div>` : ''}
+      ${conns.length ? `<div class="nurture-connections">
+        threads: ${conns.map(r => {
+          const id   = typeof r === 'string' ? r : r.id;
+          const note = typeof r === 'object' && r.note ? ` (${r.note})` : '';
+          return `<span class="nurture-conn-link" onclick="nurtureLoadById('${id}')">${id}</span>${note}`;
+        }).join(', ')}
+      </div>` : ''}
+      <div class="nurture-deepen">
+        <div style="font-size:0.72rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.75rem">deepen</div>
+        <div class="row">
+          ${['color','weight','pace','quality','motion','sound'].map(f =>
+            `<div class="field"><label>${f}</label>
+             <input type="text" id="nd-${f}" value="${(m[f]||'').replace(/"/g,'&quot;')}" placeholder="${f}..."></div>`
+          ).join('')}
+        </div>
+        <div class="field"><label>text</label>
+          <textarea id="nd-text">${(m.text||'').replace(/</g,'&lt;')}</textarea></div>
+        <div class="field"><label>note</label>
+          <textarea id="nd-note">${(m.note||'').replace(/</g,'&lt;')}</textarea></div>
+        <div class="field"><label>tags</label>
+          <input type="text" id="nd-tags" value="${(m.tags||[]).join(', ')}"></div>
+        <button class="primary" onclick="saveDeepen()">deepen</button>
+        <div class="status" id="nurture-status"></div>
+      </div>`;
+
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function nurtureLoadById(id) {
+    try {
+      const rows = await sb(`moments?id=eq.${id}&select=id,timestamp,text,color,weight,pace,quality,motion,sound,note,tags,resonance`);
+      if (rows && rows.length) openNurtureCard(rows[0]);
+    } catch(e) {}
+  }
+
+  async function saveDeepen() {
+    if (!_nurtureActive) return;
+    const st = document.getElementById('nurture-status');
+    st.className = 'status';
+    st.textContent = 'deepening...';
+    const patch = {};
+    ['color','weight','pace','quality','motion','sound'].forEach(f => {
+      const v = document.getElementById(`nd-${f}`)?.value.trim();
+      if (v) patch[f] = v;
+    });
+    const text = document.getElementById('nd-text')?.value.trim();
+    const note = document.getElementById('nd-note')?.value.trim();
+    const tagsRaw = document.getElementById('nd-tags')?.value.trim();
+    if (text !== undefined) patch.text = text;
+    if (note !== undefined) patch.note = note;
+    patch.tags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+    try {
+      await sb(`moments?id=eq.${_nurtureActive.id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: JSON.stringify(patch),
+      });
+      st.className = 'status ok';
+      st.textContent = 'deepened.';
+      _nurtureActive = { ..._nurtureActive, ...patch };
+    } catch(e) {
+      st.className = 'status err';
+      st.textContent = `couldn't deepen: ${e.message}`;
+    }
   }
 
   // --- start ---
