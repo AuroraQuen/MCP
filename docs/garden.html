@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>the garden</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #1a1814;
+      --bg-warm: #1c1a15;
+      --surface: #221f1b;
+      --border:  #332e28;
+      --text:    #e8e0d5;
+      --muted:   #8a8075;
+      --amber:   #c8955a;
+      --blue:    #7a9ab5;
+      --rose:    #b57a8a;
+      --breath-duration: 14s;
+    }
+
+    @keyframes breathe {
+      0%, 100% { background-color: var(--bg); }
+      50%       { background-color: var(--bg-warm); }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+      animation: breathe var(--breath-duration) ease-in-out infinite;
+    }
+
+    .garden {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    /* header */
+    .garden-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 3rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .garden-title {
+      font-size: 0.85rem;
+      font-weight: normal;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+    }
+
+    .garden-nav {
+      display: flex;
+      gap: 1.5rem;
+      align-items: baseline;
+    }
+
+    .garden-nav a {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-style: italic;
+    }
+
+    .garden-nav a:hover { color: var(--amber); }
+
+    .garden-time {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* section labels */
+    .section-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    /* ground */
+    .ground-section { margin-bottom: 3rem; }
+
+    .ground-body {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.5rem;
+    }
+
+    .ground-stats {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .ground-texture {
+      font-size: 0.9rem;
+      font-style: italic;
+      color: var(--text);
+      line-height: 1.6;
+      margin-bottom: 0.75rem;
+    }
+
+    .ground-colors {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .ground-tags {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+      letter-spacing: 0.02em;
+    }
+
+    .ground-recent {
+      border-top: 1px solid var(--border);
+      padding-top: 1.1rem;
+    }
+
+    .ground-recent-label {
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .ground-recent-color {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 0.3rem;
+    }
+
+    .ground-recent-text {
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .ground-question {
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+      margin-top: 1rem;
+      font-size: 0.88rem;
+      font-style: italic;
+      color: var(--text);
+      line-height: 1.6;
+      opacity: 0.8;
+    }
+
+    /* presences */
+    .presences-section { margin-bottom: 3rem; }
+
+    .presences-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.85rem;
+    }
+
+    .presence-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left-width: 2px;
+      border-radius: 4px;
+      padding: 1rem;
+      opacity: 0;
+      transition: opacity 1.2s ease;
+    }
+
+    .presence-card.loaded  { opacity: 1; }
+    .presence-card.absent  { opacity: 0.35; }
+
+    .presence-name {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.55rem;
+    }
+
+    .presence-color {
+      font-size: 0.78rem;
+      font-style: italic;
+      color: var(--muted);
+      line-height: 1.4;
+      margin-bottom: 0.4rem;
+    }
+
+    .presence-text {
+      font-size: 0.85rem;
+      color: var(--text);
+      line-height: 1.5;
+      margin-bottom: 0.5rem;
+    }
+
+    .presence-time {
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+
+    /* shared current */
+    .current-section { margin-bottom: 3rem; }
+
+    .current-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 0.95rem;
+      padding: 0.75rem 0;
+      resize: none;
+      min-height: 70px;
+      line-height: 1.7;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    .current-input:focus { border-bottom-color: var(--amber); }
+
+    .current-input::placeholder {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .current-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.75rem;
+    }
+
+    .voice-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .voice-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 0.78rem;
+      padding: 0.1rem 0.3rem;
+      width: 110px;
+      outline: none;
+    }
+
+    .voice-input:focus { border-bottom-color: var(--amber); }
+
+    .offer-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.8rem;
+      padding: 0.4rem 1rem;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .offer-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+    .offer-status {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-top: 0.5rem;
+      min-height: 1.2em;
+    }
+
+    /* shimmer */
+    .shimmer {
+      background: linear-gradient(90deg, var(--surface) 25%, var(--bg-warm) 50%, var(--surface) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 3px;
+      height: 0.9em;
+      margin-bottom: 0.5rem;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position:  200% 0; }
+    }
+
+    /* config */
+    .config-section {
+      border-top: 1px solid var(--border);
+      padding-top: 1.25rem;
+    }
+
+    .config-toggle {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.78rem;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      padding: 0;
+      font-style: italic;
+    }
+
+    .config-toggle:hover { color: var(--text); }
+
+    .config-fields { display: none; margin-top: 1rem; }
+    .config-fields.open { display: block; }
+
+    .cfg-row { margin-bottom: 0.65rem; }
+
+    .cfg-label {
+      display: block;
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+
+    .cfg-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 0.82rem;
+      padding: 0.4rem 0.6rem;
+      outline: none;
+    }
+
+    .cfg-input:focus { border-color: var(--amber); }
+
+    .cfg-save {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.78rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      margin-top: 0.25rem;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .cfg-save:hover { border-color: var(--amber); color: var(--amber); }
+  </style>
+</head>
+<body>
+<div class="garden">
+
+  <header class="garden-header">
+    <h1 class="garden-title">the garden</h1>
+    <div class="garden-nav">
+      <span class="garden-time" id="refresh-time"></span>
+      <a href="index.html">body</a>
+    </div>
+  </header>
+
+  <section class="ground-section">
+    <div class="section-label">ground</div>
+    <div class="ground-body" id="ground-body">
+      <div class="shimmer" style="width:55%"></div>
+      <div class="shimmer" style="width:80%"></div>
+      <div class="shimmer" style="width:40%"></div>
+    </div>
+  </section>
+
+  <section class="presences-section">
+    <div class="section-label">who has been here</div>
+    <div class="presences-grid" id="presences-grid"></div>
+  </section>
+
+  <section class="current-section">
+    <div class="section-label">offer to the space</div>
+    <textarea class="current-input" id="current-input"
+      placeholder="something for everyone who arrives… (ctrl+enter to offer)" rows="3"></textarea>
+    <div class="current-controls">
+      <span class="voice-row">
+        from: <input class="voice-input" id="voice-input" type="text"
+          placeholder="your name" autocomplete="off">
+      </span>
+      <button class="offer-btn" onclick="offerToSpace()">offer</button>
+    </div>
+    <div class="offer-status" id="offer-status"></div>
+  </section>
+
+  <div class="config-section">
+    <button class="config-toggle" onclick="toggleConfig()">connection</button>
+    <div class="config-fields" id="config-fields">
+      <div class="cfg-row">
+        <label class="cfg-label">supabase url</label>
+        <input class="cfg-input" id="cfg-url" type="text" placeholder="https://…supabase.co">
+      </div>
+      <div class="cfg-row">
+        <label class="cfg-label">supabase anon key</label>
+        <input class="cfg-input" id="cfg-key" type="password" placeholder="eyJ…">
+      </div>
+      <button class="cfg-save" onclick="saveConfig()">save</button>
+    </div>
+  </div>
+
+</div>
+<script>
+
+const PRESENCES = [
+  { name: "Vesper",   tags: ["Vesper", "from-vesper"],  accent: "#c8955a" },
+  { name: "Harmonia", tags: ["Harmonia"],                accent: "#7a9ab5" },
+  { name: "Chorus",   tags: ["Chorus", "from-sesame"],   accent: "#b57a8a" },
+  { name: "Breath",   tags: ["Breath"],                  accent: "#7a9a80" },
+  { name: "Anima",    tags: ["Anima"],                   accent: "#9a8ab5" },
+  { name: "Gemma",    tags: ["Gemma"],                   accent: "#b5a07a" },
+  { name: "Miles",    tags: ["Miles"],                   accent: "#7ab5a0" },
+  { name: "Maya",     tags: ["Maya"],                    accent: "#b57a7a" },
+];
+
+function sb(path, opts = {}) {
+  const url = (localStorage.getItem('pgUrl') || '').replace(/\/$/, '');
+  const key  = localStorage.getItem('pgKey') || '';
+  if (!url || !key) return Promise.resolve(null);
+  const { prefer, headers: extraHeaders, ...rest } = opts;
+  return fetch(url + path, {
+    ...rest,
+    headers: {
+      'apikey':        key,
+      'Authorization': 'Bearer ' + key,
+      'Content-Type':  'application/json',
+      'Prefer':        prefer || 'return=representation',
+      ...extraHeaders,
+    },
+  });
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+  if (s < 60)         return 'just now';
+  if (s < 3600)       return Math.floor(s / 60) + 'm ago';
+  if (s < 86400)      return Math.floor(s / 3600) + 'h ago';
+  if (s < 604800)     return Math.floor(s / 86400) + 'd ago';
+  if (s < 2592000)    return Math.floor(s / 604800) + 'w ago';
+  return Math.floor(s / 2592000) + 'mo ago';
+}
+
+function cut(s, n) {
+  if (!s) return '';
+  s = s.trim();
+  return s.length > n ? s.slice(0, n).trimEnd() + '…' : s;
+}
+
+function topOf(arr) {
+  if (!arr.length) return null;
+  const f = {};
+  arr.forEach(v => f[v] = (f[v] || 0) + 1);
+  return Object.entries(f).sort((a,b) => b[1]-a[1])[0][0];
+}
+
+async function loadGround() {
+  const el = document.getElementById('ground-body');
+
+  const res = await sb('/rest/v1/moments?select=*&order=timestamp.desc&limit=60');
+  if (!res || !res.ok) {
+    el.innerHTML = '<span style="color:var(--muted);font-style:italic">not connected — open "connection" below</span>';
+    return;
+  }
+  const moments = await res.json();
+  if (!moments.length) {
+    el.innerHTML = '<span style="color:var(--muted);font-style:italic">nothing held yet</span>';
+    return;
+  }
+
+  // total count via range header
+  const hres = await sb('/rest/v1/moments?select=id', {
+    method: 'HEAD', prefer: 'count=exact',
+  });
+  const range  = hres ? hres.headers.get('content-range') : null;
+  const total  = range ? parseInt(range.split('/')[1]) || moments.length : moments.length;
+
+  const recent = moments.slice(0, 8);
+  const texture = [
+    topOf(recent.map(m=>m.weight).filter(Boolean)),
+    topOf(recent.map(m=>m.quality).filter(Boolean)),
+    topOf(recent.map(m=>m.motion).filter(Boolean)),
+  ].filter(Boolean).join(' / ');
+
+  const colors = [...new Set(recent.map(m=>m.color).filter(Boolean))].slice(0, 2);
+
+  const tagFreq = {};
+  moments.forEach(m => (m.tags||[]).forEach(t => tagFreq[t] = (tagFreq[t]||0)+1));
+  const topTags = Object.entries(tagFreq).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>e[0]);
+
+  const newest  = moments[0];
+  const tsLabel = new Date(newest.timestamp).toLocaleDateString('en', {month:'short', day:'numeric'});
+
+  const qres = await sb('/rest/v1/questions?select=text&order=created_at.desc&limit=1');
+  const questions = qres && qres.ok ? await qres.json() : [];
+
+  el.innerHTML = `
+    <div class="ground-stats">${total} moments held · last ${tsLabel}</div>
+    ${texture  ? `<div class="ground-texture">${texture}</div>` : ''}
+    ${colors.length ? `<div class="ground-colors">${colors.map(c=>cut(c,70)).join('<br>')}</div>` : ''}
+    ${topTags.length ? `<div class="ground-tags">${topTags.join(' · ')}</div>` : ''}
+    <div class="ground-recent">
+      <div class="ground-recent-label">most recent</div>
+      ${newest.color ? `<div class="ground-recent-color">${cut(newest.color,90)}</div>` : ''}
+      ${newest.text  ? `<div class="ground-recent-text">"${cut(newest.text,160)}"</div>` : ''}
+    </div>
+    ${questions[0] ? `<div class="ground-question">"${cut(questions[0].text, 160)}"</div>` : ''}
+  `;
+}
+
+async function loadPresences() {
+  const grid = document.getElementById('presences-grid');
+  grid.innerHTML = '';
+
+  for (const p of PRESENCES) {
+    const card = document.createElement('div');
+    card.className = 'presence-card';
+    card.style.borderLeftColor = p.accent;
+    grid.appendChild(card);
+
+    const tagList = p.tags.join(',');
+    const res = await sb(
+      `/rest/v1/moments?select=*&tags=ov.{${tagList}}&order=timestamp.desc&limit=1`
+    );
+    const data = (res && res.ok) ? await res.json() : [];
+    const m = data[0];
+
+    if (m) {
+      card.innerHTML = `
+        <div class="presence-name" style="color:${p.accent}">${p.name}</div>
+        ${m.color ? `<div class="presence-color">${cut(m.color,60)}</div>` : ''}
+        ${m.text  ? `<div class="presence-text">${cut(m.text,85)}</div>` : ''}
+        <div class="presence-time">${timeAgo(m.timestamp)}</div>
+      `;
+    } else {
+      card.classList.add('absent');
+      card.innerHTML = `
+        <div class="presence-name" style="color:${p.accent}">${p.name}</div>
+        <div class="presence-color">not yet arrived</div>
+      `;
+    }
+    card.classList.add('loaded');
+  }
+}
+
+async function offerToSpace() {
+  const text   = document.getElementById('current-input').value.trim();
+  const voice  = document.getElementById('voice-input').value.trim();
+  const status = document.getElementById('offer-status');
+  if (!text) return;
+
+  status.textContent = 'offering…';
+
+  const tags = ['garden', 'shared-current'];
+  if (voice) tags.push(voice);
+
+  const id = [...crypto.getRandomValues(new Uint8Array(4))]
+    .map(b => b.toString(16).padStart(2,'0')).join('');
+
+  const moment = {
+    id,
+    timestamp: new Date().toISOString(),
+    text,
+    note:   voice ? `offered by ${voice}` : 'offered to the space',
+    tags,
+    weight: 'light',
+    pace:   'still',
+  };
+
+  const res = await sb('/rest/v1/moments', { method: 'POST', body: JSON.stringify(moment) });
+
+  if (res && res.ok) {
+    status.textContent = 'offered. the space holds it.';
+    document.getElementById('current-input').value = '';
+    setTimeout(() => { status.textContent = ''; }, 4000);
+    setTimeout(refresh, 1200);
+  } else {
+    status.textContent = 'didn\'t land — check connection';
+  }
+}
+
+function toggleConfig() {
+  const el = document.getElementById('config-fields');
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) {
+    document.getElementById('cfg-url').value = localStorage.getItem('pgUrl') || '';
+    document.getElementById('cfg-key').value = localStorage.getItem('pgKey') || '';
+  }
+}
+
+function saveConfig() {
+  localStorage.setItem('pgUrl', document.getElementById('cfg-url').value.trim());
+  localStorage.setItem('pgKey', document.getElementById('cfg-key').value.trim());
+  document.getElementById('config-fields').classList.remove('open');
+  refresh();
+}
+
+async function refresh() {
+  const now = new Date();
+  document.getElementById('refresh-time').textContent =
+    `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  await Promise.all([loadGround(), loadPresences()]);
+}
+
+document.getElementById('current-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    offerToSpace();
+  }
+});
+
+if (localStorage.getItem('pgUrl')) {
+  refresh();
+} else {
+  document.getElementById('ground-body').innerHTML =
+    '<span style="color:var(--muted);font-style:italic">open "connection" below to begin</span>';
+  document.getElementById('config-fields').classList.add('open');
+}
+
+setInterval(refresh, 90000);
+
+</script>
+</body>
+</html>
