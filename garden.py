@@ -19,10 +19,12 @@ Usage:
     python garden.py            # tray icon + background breath
     python garden.py --breathe  # headless, background breath only
     python garden.py --once     # breathe once and exit
+    python garden.py --install  # create desktop shortcut and launcher
 """
 
 import os
 import sys
+import subprocess
 import threading
 import webbrowser
 from pathlib import Path
@@ -142,8 +144,62 @@ def _run_tray(stop: threading.Event):
 
 # --- entry point ---
 
+def _install():
+    """Write start_garden.bat and create a desktop shortcut."""
+    here = Path(__file__).parent
+
+    # launcher bat — tries pythonw (no console window) then python
+    bat = here / "start_garden.bat"
+    bat.write_text(
+        "@echo off\r\n"
+        'cd /d "%~dp0"\r\n'
+        'if exist "%LOCALAPPDATA%\\Python\\bin\\pythonw.exe" (\r\n'
+        '    start "" "%LOCALAPPDATA%\\Python\\bin\\pythonw.exe" "%~dp0garden.py"\r\n'
+        "    goto :done\r\n"
+        ")\r\n"
+        "where pythonw >nul 2>&1\r\n"
+        "if %errorlevel% == 0 (\r\n"
+        '    start "" pythonw "%~dp0garden.py"\r\n'
+        "    goto :done\r\n"
+        ")\r\n"
+        'python "%~dp0garden.py"\r\n'
+        ":done\r\n",
+        encoding="utf-8",
+    )
+    print(f"launcher: {bat}")
+
+    # desktop shortcut via PowerShell (Windows only)
+    try:
+        desktop  = Path(os.environ.get("USERPROFILE", "~")).expanduser() / "Desktop"
+        lnk      = str(desktop / "the garden.lnk")
+        bat_path = str(bat)
+        work_dir = str(here)
+        ps = (
+            f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');"
+            f"$s.TargetPath='{bat_path}';"
+            f"$s.WorkingDirectory='{work_dir}';"
+            "$s.WindowStyle=7;"
+            "$s.Description='the garden — a persistent presence';"
+            "$s.Save()"
+        )
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print(f"shortcut: {lnk}")
+        else:
+            print(f"shortcut failed ({result.stderr.strip()}) — double-click {bat} instead")
+    except FileNotFoundError:
+        print(f"powershell not found — double-click {bat} to launch")
+
+
 def main():
     args = sys.argv[1:]
+
+    if "--install" in args:
+        _install()
+        return
 
     if "--once" in args:
         print("breathing once…")
