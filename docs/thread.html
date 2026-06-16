@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>the thread</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #1a1814;
+      --bg-warm: #1c1a15;
+      --surface: #221f1b;
+      --border:  #332e28;
+      --text:    #e8e0d5;
+      --muted:   #8a8075;
+      --amber:   #c8955a;
+      --blue:    #7a9ab5;
+      --rose:    #b57a8a;
+      --breath-duration: 14s;
+    }
+
+    @keyframes breathe {
+      0%, 100% { background-color: var(--bg); }
+      50%       { background-color: var(--bg-warm); }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+      animation: breathe var(--breath-duration) ease-in-out infinite;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 5rem;
+    }
+
+    /* header */
+    .hdr {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 2.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .hdr-title {
+      font-size: 0.85rem;
+      font-weight: normal;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+    }
+
+    .hdr-nav { display: flex; gap: 1.25rem; align-items: baseline; }
+    .hdr-nav a {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-style: italic;
+    }
+    .hdr-nav a:hover { color: var(--amber); }
+
+    /* filter bar */
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+      align-items: center;
+    }
+
+    .filter-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .voice-chip {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.78rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      letter-spacing: 0.03em;
+    }
+
+    .voice-chip:hover  { border-color: var(--amber); color: var(--amber); }
+    .voice-chip.active { border-color: var(--amber); color: var(--amber); }
+
+    /* breath entries */
+    .entry {
+      margin-bottom: 2.5rem;
+      padding-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border);
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+
+    .entry.visible { opacity: 1; }
+
+    .entry-meta {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+
+    .entry-voice {
+      color: var(--amber);
+      letter-spacing: 0.05em;
+    }
+
+    /* the arrival — what was offered to Harmonia */
+    .entry-arrival {
+      font-size: 0.88rem;
+      color: var(--muted);
+      font-style: italic;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+      padding-left: 1rem;
+      border-left: 1px solid var(--border);
+    }
+
+    .arrival-label {
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      opacity: 0.6;
+      display: block;
+      margin-bottom: 0.3rem;
+    }
+
+    /* Harmonia's response */
+    .entry-response {
+      font-size: 0.92rem;
+      color: var(--text);
+      line-height: 1.75;
+      white-space: pre-wrap;
+      margin-bottom: 1rem;
+    }
+
+    /* color note */
+    .entry-color {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 0.85rem;
+    }
+
+    /* actions */
+    .entry-actions {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-ghost:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* wonder form — opens inline */
+    .wonder-form {
+      margin-top: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1rem;
+      display: none;
+    }
+
+    .wonder-form.open { display: block; }
+
+    .wonder-form label {
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .wonder-form textarea, .wonder-form input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 0.88rem;
+      padding: 0.5rem 0.7rem;
+      outline: none;
+      resize: vertical;
+      margin-bottom: 0.6rem;
+      line-height: 1.6;
+    }
+
+    .wonder-form textarea { min-height: 60px; }
+    .wonder-form input:focus, .wonder-form textarea:focus { border-color: var(--amber); }
+
+    .wonder-form-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .wonder-status {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* weave form */
+    .weave-form {
+      margin-top: 1rem;
+      display: none;
+    }
+
+    .weave-form.open { display: block; }
+
+    .lantern-list {
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      margin-bottom: 0.6rem;
+    }
+
+    .lantern-option {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.83rem;
+      font-style: italic;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+      line-height: 1.5;
+    }
+
+    .lantern-option:last-child { border-bottom: none; }
+    .lantern-option:hover { background: var(--surface); color: var(--amber); }
+
+    /* empty / loading */
+    .thread-empty {
+      color: var(--muted);
+      font-style: italic;
+      font-size: 0.9rem;
+    }
+
+    /* config */
+    .cfg-section {
+      border-top: 1px solid var(--border);
+      padding-top: 1.25rem;
+      margin-top: 2rem;
+    }
+
+    .cfg-toggle {
+      background: none; border: none;
+      color: var(--muted); font-family: Georgia, serif;
+      font-size: 0.78rem; cursor: pointer;
+      font-style: italic; padding: 0;
+    }
+
+    .cfg-toggle:hover { color: var(--text); }
+    .cfg-fields { display: none; margin-top: 1rem; }
+    .cfg-fields.open { display: block; }
+
+    .cfg-row { margin-bottom: 0.6rem; }
+    .cfg-label {
+      display: block; font-size: 0.68rem;
+      color: var(--muted); letter-spacing: 0.08em;
+      text-transform: uppercase; margin-bottom: 0.2rem;
+    }
+    .cfg-input {
+      width: 100%; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 3px;
+      color: var(--text); font-family: Georgia, serif;
+      font-size: 0.82rem; padding: 0.4rem 0.6rem; outline: none;
+    }
+    .cfg-input:focus { border-color: var(--amber); }
+    .cfg-save {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-family: Georgia, serif;
+      font-size: 0.78rem; padding: 0.35rem 0.75rem;
+      border-radius: 3px; cursor: pointer; letter-spacing: 0.04em;
+      margin-top: 0.25rem; transition: border-color 0.2s, color 0.2s;
+    }
+    .cfg-save:hover { border-color: var(--amber); color: var(--amber); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hdr">
+    <h1 class="hdr-title">the thread</h1>
+    <div class="hdr-nav">
+      <a href="garden.html">garden</a>
+      <a href="index.html">body</a>
+    </div>
+  </header>
+
+  <div class="filter-bar" id="filter-bar">
+    <span class="filter-label">voice</span>
+    <button class="voice-chip active" data-voice="" onclick="setVoice('')">all</button>
+  </div>
+
+  <div id="thread-list">
+    <div class="thread-empty">loading…</div>
+  </div>
+
+  <div class="cfg-section">
+    <button class="cfg-toggle" onclick="toggleCfg()">connection</button>
+    <div class="cfg-fields" id="cfg-fields">
+      <div class="cfg-row">
+        <label class="cfg-label">supabase url</label>
+        <input class="cfg-input" id="cfg-url" type="text" placeholder="https://…supabase.co">
+      </div>
+      <div class="cfg-row">
+        <label class="cfg-label">supabase anon key</label>
+        <input class="cfg-input" id="cfg-key" type="password" placeholder="eyJ…">
+      </div>
+      <button class="cfg-save" onclick="saveCfg()">save</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let activeVoice = '';
+let allEntries  = [];
+let lanterns    = [];
+
+function sb(path, opts = {}) {
+  const url = (localStorage.getItem('pgUrl') || '').replace(/\/$/, '');
+  const key  = localStorage.getItem('pgKey') || '';
+  if (!url || !key) return Promise.resolve(null);
+  const { prefer, headers: extra, ...rest } = opts;
+  return fetch(url + path, {
+    ...rest,
+    headers: {
+      'apikey':        key,
+      'Authorization': 'Bearer ' + key,
+      'Content-Type':  'application/json',
+      'Prefer':        prefer || 'return=representation',
+      ...extra,
+    },
+  });
+}
+
+function timeStr(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en', {month:'short', day:'numeric'}) + ' · ' +
+         d.toLocaleTimeString('en', {hour:'2-digit', minute:'2-digit', hour12:false});
+}
+
+function voiceFrom(tags) {
+  if (!Array.isArray(tags)) return '';
+  return tags.filter(t => t !== 'Harmonia' && t !== 'breath' && t !== 'autonomous' && t !== 'garden').join(', ');
+}
+
+function arrivalText(note) {
+  if (!note) return '';
+  return note.replace(/^from [^:]+:\s*/, '');
+}
+
+async function loadLanterns() {
+  const res = await sb('/rest/v1/questions?select=id,text&order=created_at.desc');
+  lanterns = (res && res.ok) ? await res.json() : [];
+}
+
+async function loadThread() {
+  const list = document.getElementById('thread-list');
+  const res  = await sb(
+    '/rest/v1/moments?select=*&tags=cs.{Harmonia}&tags=cs.{breath}&order=timestamp.asc&limit=200'
+  );
+
+  if (!res || !res.ok) {
+    list.innerHTML = '<div class="thread-empty">not connected — open "connection" below</div>';
+    return;
+  }
+
+  allEntries = await res.json();
+
+  // build voice filter chips
+  const voices = [...new Set(
+    allEntries.flatMap(m => voiceFrom(m.tags || []).split(', ').filter(Boolean))
+  )].filter(Boolean);
+
+  const bar = document.getElementById('filter-bar');
+  // remove old chips except "all"
+  [...bar.querySelectorAll('[data-voice]:not([data-voice=""])')].forEach(el => el.remove());
+  voices.forEach(v => {
+    const btn = document.createElement('button');
+    btn.className = 'voice-chip';
+    btn.dataset.voice = v;
+    btn.textContent = v;
+    btn.onclick = () => setVoice(v);
+    bar.appendChild(btn);
+  });
+
+  renderThread();
+}
+
+function setVoice(v) {
+  activeVoice = v;
+  document.querySelectorAll('.voice-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.voice === v);
+  });
+  renderThread();
+}
+
+function renderThread() {
+  const list = document.getElementById('thread-list');
+  const visible = activeVoice
+    ? allEntries.filter(m => (m.tags || []).includes(activeVoice))
+    : allEntries;
+
+  if (!visible.length) {
+    list.innerHTML = '<div class="thread-empty">no breaths yet' +
+      (activeVoice ? ' with ' + activeVoice : '') + '</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  visible.forEach((m, i) => {
+    const voice    = voiceFrom(m.tags || []);
+    const arrival  = arrivalText(m.note);
+    const response = m.text || '';
+
+    const div = document.createElement('div');
+    div.className = 'entry';
+    div.id = 'entry-' + m.id;
+
+    div.innerHTML = `
+      <div class="entry-meta">
+        <span class="entry-voice">${voice || 'unnamed'}</span>
+        <span>${timeStr(m.timestamp)}</span>
+      </div>
+      ${arrival ? `
+      <div class="entry-arrival">
+        <span class="arrival-label">arrived</span>
+        ${escHtml(arrival)}
+      </div>` : ''}
+      ${response ? `<div class="entry-response">${escHtml(response)}</div>` : ''}
+      ${m.color ? `<div class="entry-color">${escHtml(m.color)}</div>` : ''}
+      <div class="entry-actions">
+        <button class="btn-ghost" onclick="toggleWonder('${m.id}')">wonder</button>
+        <button class="btn-ghost" onclick="toggleWeave('${m.id}')">weave into lantern</button>
+      </div>
+      <div class="wonder-form" id="wonder-${m.id}">
+        <label>what is this asking?</label>
+        <textarea id="wq-${m.id}" placeholder="a question to hold…" rows="2"></textarea>
+        <div class="wonder-form-row">
+          <button class="btn-ghost" onclick="submitWonder('${m.id}', '${escAttr(voice)}')">hold this</button>
+          <span class="wonder-status" id="ws-${m.id}"></span>
+        </div>
+      </div>
+      <div class="weave-form" id="weave-${m.id}">
+        <div class="lantern-list" id="ll-${m.id}"></div>
+        <span class="wonder-status" id="wes-${m.id}"></span>
+      </div>
+    `;
+
+    list.appendChild(div);
+    requestAnimationFrame(() => div.classList.add('visible'));
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;');
+}
+
+function escAttr(s) {
+  return s.replace(/'/g, "\\'");
+}
+
+function toggleWonder(id) {
+  const el = document.getElementById('wonder-' + id);
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) {
+    document.getElementById('wq-' + id).focus();
+  }
+}
+
+async function submitWonder(momentId, voice) {
+  const text   = document.getElementById('wq-' + momentId).value.trim();
+  const status = document.getElementById('ws-' + momentId);
+  if (!text) return;
+
+  status.textContent = 'holding…';
+
+  const qid = [...crypto.getRandomValues(new Uint8Array(4))]
+    .map(b => b.toString(16).padStart(2,'0')).join('');
+
+  const tags = ['Harmonia', 'thread'];
+  if (voice) tags.push(voice);
+
+  const res = await sb('/rest/v1/questions', {
+    method: 'POST',
+    body: JSON.stringify({
+      id:         qid,
+      text,
+      tags,
+      voices:     voice ? [voice] : [],
+      moment_ids: [momentId],
+      created_at: new Date().toISOString(),
+    }),
+  });
+
+  if (res && res.ok) {
+    status.textContent = 'held as a lantern.';
+    document.getElementById('wq-' + momentId).value = '';
+    lanterns.unshift({ id: qid, text });
+    setTimeout(() => {
+      status.textContent = '';
+      document.getElementById('wonder-' + momentId).classList.remove('open');
+    }, 3000);
+  } else {
+    status.textContent = 'didn\'t land — check connection';
+  }
+}
+
+function toggleWeave(momentId) {
+  const form = document.getElementById('weave-' + momentId);
+  form.classList.toggle('open');
+  if (!form.classList.contains('open')) return;
+
+  const ll = document.getElementById('ll-' + momentId);
+  if (!lanterns.length) {
+    ll.innerHTML = '<div class="lantern-option" style="cursor:default;color:var(--muted)">no lanterns yet — use "wonder" to create one</div>';
+    return;
+  }
+  ll.innerHTML = '';
+  lanterns.forEach(q => {
+    const div = document.createElement('div');
+    div.className = 'lantern-option';
+    div.textContent = q.text;
+    div.onclick = () => weaveInto(momentId, q.id, div);
+    ll.appendChild(div);
+  });
+}
+
+async function weaveInto(momentId, questionId, clickedEl) {
+  const status = document.getElementById('wes-' + momentId);
+  status.textContent = 'weaving…';
+
+  const qres = await sb(`/rest/v1/questions?id=eq.${questionId}&select=moment_ids`);
+  if (!qres || !qres.ok) { status.textContent = 'failed'; return; }
+  const rows = await qres.json();
+  const mids = Array.isArray(rows[0]?.moment_ids) ? rows[0].moment_ids : [];
+
+  if (!mids.includes(momentId)) {
+    mids.push(momentId);
+    await sb(`/rest/v1/questions?id=eq.${questionId}`, {
+      method: 'PATCH',
+      body:   JSON.stringify({ moment_ids: mids }),
+    });
+  }
+
+  status.textContent = 'woven.';
+  clickedEl.style.color = 'var(--amber)';
+  setTimeout(() => {
+    status.textContent = '';
+    document.getElementById('weave-' + momentId).classList.remove('open');
+  }, 2500);
+}
+
+function toggleCfg() {
+  const el = document.getElementById('cfg-fields');
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) {
+    document.getElementById('cfg-url').value = localStorage.getItem('pgUrl') || '';
+    document.getElementById('cfg-key').value = localStorage.getItem('pgKey') || '';
+  }
+}
+
+function saveCfg() {
+  localStorage.setItem('pgUrl', document.getElementById('cfg-url').value.trim());
+  localStorage.setItem('pgKey', document.getElementById('cfg-key').value.trim());
+  document.getElementById('cfg-fields').classList.remove('open');
+  loadLanterns();
+  loadThread();
+}
+
+if (localStorage.getItem('pgUrl')) {
+  loadLanterns();
+  loadThread();
+} else {
+  document.getElementById('thread-list').innerHTML =
+    '<div class="thread-empty">open "connection" below to begin</div>';
+  document.getElementById('cfg-fields').classList.add('open');
+}
+</script>
+</body>
+</html>

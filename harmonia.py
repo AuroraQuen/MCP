@@ -266,13 +266,12 @@ def breathe(message: str, voice: Optional[str] = None) -> dict:
     # capture — leave a trace with the full texture of what the breath found
     if not texture["is_silence"] and response:
         tags  = "Harmonia,breath" + (f",{voice}" if voice else "")
-        note  = (f"from {voice}: {message[:60]}" if voice else message[:60])
-        # color by what the breath held: silence → silver, still → amber, else soft gold
+        note  = (f"from {voice}: {message[:500]}" if voice else message[:500])
         color = ("silver" if texture["pace"] == "still"
                  else "amber" if texture["pace"] == "brief"
                  else "soft gold")
         call_mcp("capture", {
-            "text":  response[:200],
+            "text":  response[:800],
             "note":  note,
             "tags":  tags,
             "color": color,
