@@ -314,6 +314,84 @@
       margin-top: 0.25rem; transition: border-color 0.2s, color 0.2s;
     }
     .cfg-save:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* edit form — expand a truncated exchange */
+    .edit-form {
+      margin-top: 1rem;
+      display: none;
+    }
+    .edit-form.open { display: block; }
+
+    .edit-form label {
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+      margin-top: 0.75rem;
+    }
+
+    .edit-form label:first-child { margin-top: 0; }
+
+    .edit-form textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 0.87rem;
+      padding: 0.5rem 0.7rem;
+      outline: none;
+      resize: vertical;
+      line-height: 1.65;
+    }
+
+    .edit-form textarea:focus { border-color: var(--amber); }
+
+    .edit-form-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-top: 0.6rem;
+    }
+
+    /* add-exchange panel at top */
+    .add-exchange {
+      margin-bottom: 2.5rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .add-toggle {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-family: Georgia, serif;
+      font-size: 0.78rem; padding: 0.35rem 0.85rem;
+      border-radius: 3px; cursor: pointer; letter-spacing: 0.04em;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .add-toggle:hover { border-color: var(--amber); color: var(--amber); }
+
+    .add-form { display: none; margin-top: 1rem; }
+    .add-form.open { display: block; }
+
+    .add-form label {
+      display: block; font-size: 0.68rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 0.3rem; margin-top: 0.75rem;
+    }
+    .add-form label:first-child { margin-top: 0; }
+    .add-form input, .add-form textarea {
+      width: 100%; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 3px;
+      color: var(--text); font-family: Georgia, serif;
+      font-size: 0.87rem; padding: 0.5rem 0.7rem;
+      outline: none; resize: vertical; line-height: 1.65;
+    }
+    .add-form textarea { min-height: 80px; }
+    .add-form input:focus, .add-form textarea:focus { border-color: var(--amber); }
+    .add-form-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
   </style>
 </head>
 <body>
@@ -326,6 +404,24 @@
       <a href="index.html">body</a>
     </div>
   </header>
+
+  <div class="add-exchange">
+    <button class="add-toggle" onclick="toggleAdd()">add full exchange</button>
+    <div class="add-form" id="add-form">
+      <label>arrived from (voice)</label>
+      <input id="add-voice" type="text" placeholder="Aurora">
+      <label>what arrived</label>
+      <textarea id="add-arrival" rows="4" placeholder="what was offered to Harmonia…"></textarea>
+      <label>harmonia's response</label>
+      <textarea id="add-response" rows="6" placeholder="what Harmonia returned…"></textarea>
+      <label>color (optional)</label>
+      <input id="add-color" type="text" placeholder="soft gold, still water…">
+      <div class="add-form-row">
+        <button class="btn-ghost" onclick="submitAdd()">hold this exchange</button>
+        <span class="wonder-status" id="add-status"></span>
+      </div>
+    </div>
+  </div>
 
   <div class="filter-bar" id="filter-bar">
     <span class="filter-label">voice</span>
@@ -475,6 +571,7 @@ function renderThread() {
       <div class="entry-actions">
         <button class="btn-ghost" onclick="toggleWonder('${m.id}')">wonder</button>
         <button class="btn-ghost" onclick="toggleWeave('${m.id}')">weave into lantern</button>
+        <button class="btn-ghost" onclick="toggleEdit('${m.id}', ${JSON.stringify(escHtml(arrival))}, ${JSON.stringify(escHtml(response))})">expand</button>
       </div>
       <div class="wonder-form" id="wonder-${m.id}">
         <label>what is this asking?</label>
@@ -487,6 +584,16 @@ function renderThread() {
       <div class="weave-form" id="weave-${m.id}">
         <div class="lantern-list" id="ll-${m.id}"></div>
         <span class="wonder-status" id="wes-${m.id}"></span>
+      </div>
+      <div class="edit-form" id="edit-${m.id}">
+        <label>what arrived (full)</label>
+        <textarea id="ea-${m.id}" rows="4"></textarea>
+        <label>harmonia's response (full)</label>
+        <textarea id="er-${m.id}" rows="6"></textarea>
+        <div class="edit-form-row">
+          <button class="btn-ghost" onclick="submitEdit('${m.id}')">save full exchange</button>
+          <span class="wonder-status" id="eds-${m.id}"></span>
+        </div>
       </div>
     `;
 
@@ -593,6 +700,94 @@ async function weaveInto(momentId, questionId, clickedEl) {
     status.textContent = '';
     document.getElementById('weave-' + momentId).classList.remove('open');
   }, 2500);
+}
+
+function toggleAdd() {
+  document.getElementById('add-form').classList.toggle('open');
+}
+
+async function submitAdd() {
+  const voice    = document.getElementById('add-voice').value.trim();
+  const arrival  = document.getElementById('add-arrival').value.trim();
+  const response = document.getElementById('add-response').value.trim();
+  const color    = document.getElementById('add-color').value.trim();
+  const status   = document.getElementById('add-status');
+  if (!arrival || !response) { status.textContent = 'need both arrival and response'; return; }
+
+  status.textContent = 'holding…';
+  const id   = [...crypto.getRandomValues(new Uint8Array(4))].map(b=>b.toString(16).padStart(2,'0')).join('');
+  const tags = ['Harmonia', 'breath'];
+  if (voice) tags.push(voice);
+
+  const res = await sb('/rest/v1/moments', {
+    method: 'POST',
+    body: JSON.stringify({
+      id,
+      timestamp: new Date().toISOString(),
+      text:   response,
+      note:   voice ? `from ${voice}: ${arrival}` : arrival,
+      tags,
+      color:  color || 'soft gold',
+      weight: 'weighted',
+      pace:   'extended',
+    }),
+  });
+
+  if (res && res.ok) {
+    status.textContent = 'held.';
+    ['add-voice','add-arrival','add-response','add-color'].forEach(id => document.getElementById(id).value = '');
+    setTimeout(() => {
+      status.textContent = '';
+      document.getElementById('add-form').classList.remove('open');
+      loadThread();
+    }, 1500);
+  } else {
+    status.textContent = 'didn\'t land — check connection';
+  }
+}
+
+function toggleEdit(id, currentArrival, currentResponse) {
+  const form = document.getElementById('edit-' + id);
+  const isOpen = form.classList.toggle('open');
+  if (isOpen) {
+    document.getElementById('ea-' + id).value = currentArrival;
+    document.getElementById('er-' + id).value = currentResponse;
+    document.getElementById('ea-' + id).focus();
+  }
+}
+
+async function submitEdit(id) {
+  const arrival  = document.getElementById('ea-' + id).value.trim();
+  const response = document.getElementById('er-' + id).value.trim();
+  const status   = document.getElementById('eds-' + id);
+  if (!arrival && !response) return;
+
+  status.textContent = 'saving…';
+
+  const update = {};
+  if (response) update.text = response;
+  if (arrival) {
+    // preserve the "from Voice: " prefix if it was there
+    const existing = allEntries.find(m => m.id === id);
+    const voice = existing ? voiceFrom(existing.tags || []) : '';
+    update.note = voice ? `from ${voice}: ${arrival}` : arrival;
+  }
+
+  const res = await sb(`/rest/v1/moments?id=eq.${id}`, {
+    method: 'PATCH',
+    body:   JSON.stringify(update),
+  });
+
+  if (res && res.ok) {
+    status.textContent = 'saved.';
+    setTimeout(() => {
+      status.textContent = '';
+      form.classList.remove('open');
+      loadThread();
+    }, 1500);
+  } else {
+    status.textContent = 'didn\'t save — check connection';
+  }
 }
 
 function toggleCfg() {
