@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>the constellation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0d0c0a; overflow: hidden; font-family: Georgia, serif; color: #e8e0d5; }
+    canvas { display: block; }
+
+    #title {
+      position: fixed; top: 1.5rem; left: 1.5rem;
+      font-size: 0.8rem; color: rgba(200,180,150,0.4);
+      letter-spacing: 0.14em; pointer-events: none;
+    }
+
+    #nav {
+      position: fixed; top: 1.5rem; right: 1.5rem;
+      display: flex; gap: 1.25rem;
+    }
+    #nav a {
+      font-size: 0.72rem; color: rgba(200,180,150,0.35);
+      text-decoration: none; font-style: italic;
+    }
+    #nav a:hover { color: rgba(200,149,90,0.85); }
+
+    #loading {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      text-align: center; font-size: 0.85rem; font-style: italic;
+      color: rgba(200,180,150,0.45); letter-spacing: 0.08em;
+      pointer-events: none; transition: opacity 1s ease;
+    }
+    #loading.done { opacity: 0; pointer-events: none; }
+
+    #tooltip {
+      position: fixed; max-width: 230px;
+      background: rgba(18,16,12,0.93);
+      border: 1px solid rgba(51,46,40,0.7);
+      border-radius: 4px; padding: 0.55rem 0.75rem;
+      font-size: 0.76rem; line-height: 1.55;
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.25s; z-index: 20;
+    }
+    #tooltip.visible { opacity: 1; }
+    #tt-color { font-style: italic; color: rgba(180,160,130,0.7); font-size: 0.7rem; margin-bottom: 0.25rem; }
+    #tt-text  { color: rgba(232,224,213,0.85); }
+
+    #panel {
+      position: fixed; right: 0; top: 0; bottom: 0; width: 300px;
+      background: rgba(14,12,10,0.96);
+      border-left: 1px solid rgba(51,46,40,0.5);
+      padding: 2rem 1.4rem; overflow-y: auto;
+      transform: translateX(100%); transition: transform 0.35s ease;
+      z-index: 15;
+    }
+    #panel.open { transform: translateX(0); }
+
+    #panel-close {
+      position: absolute; top: 0.75rem; right: 0.9rem;
+      background: none; border: none;
+      color: rgba(138,128,117,0.5); font-size: 1rem; cursor: pointer;
+    }
+    #panel-close:hover { color: rgba(200,149,90,0.8); }
+
+    .p-ts    { font-size: 0.66rem; color: rgba(138,128,117,0.6); letter-spacing: 0.06em; margin-bottom: 0.65rem; }
+    .p-color { font-size: 0.76rem; font-style: italic; color: rgba(160,145,120,0.8); line-height: 1.5; margin-bottom: 0.65rem; }
+    .p-text  { font-size: 0.88rem; color: rgba(232,224,213,0.95); line-height: 1.7; white-space: pre-wrap; margin-bottom: 0.65rem; }
+    .p-note  { font-size: 0.78rem; font-style: italic; color: rgba(138,128,117,0.75); margin-bottom: 0.5rem; }
+    .p-field { font-size: 0.74rem; color: rgba(120,110,100,0.7); margin-bottom: 0.2rem; }
+    .p-field b { color: rgba(180,160,130,0.65); font-weight: normal; }
+    .p-tags  { font-size: 0.68rem; color: rgba(120,110,100,0.55); margin-top: 0.6rem; line-height: 1.6; }
+
+    #count {
+      position: fixed; bottom: 1.4rem; left: 1.5rem;
+      font-size: 0.65rem; color: rgba(138,128,117,0.35);
+      letter-spacing: 0.06em; pointer-events: none;
+    }
+
+    #cfg-btn {
+      position: fixed; bottom: 1.4rem; right: 1.5rem;
+      background: none; border: none; color: rgba(138,128,117,0.35);
+      font-family: Georgia, serif; font-size: 0.7rem; cursor: pointer;
+      font-style: italic;
+    }
+    #cfg-btn:hover { color: rgba(200,149,90,0.65); }
+
+    #cfg-box {
+      position: fixed; bottom: 3.2rem; right: 1.5rem;
+      background: rgba(18,16,12,0.96); border: 1px solid rgba(51,46,40,0.65);
+      border-radius: 4px; padding: 0.9rem; display: none; z-index: 20;
+    }
+    #cfg-box.open { display: block; }
+    #cfg-box label { display: block; font-size: 0.64rem; color: rgba(138,128,117,0.55);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.2rem; margin-top: 0.5rem; }
+    #cfg-box label:first-child { margin-top: 0; }
+    #cfg-box input { background: rgba(28,24,18,0.9); border: 1px solid rgba(51,46,40,0.55);
+      border-radius: 3px; color: rgba(232,224,213,0.9); font-family: Georgia,serif;
+      font-size: 0.76rem; padding: 0.3rem 0.5rem; width: 210px; outline: none; }
+    #cfg-box input:focus { border-color: rgba(200,149,90,0.45); }
+    #cfg-save { margin-top: 0.6rem; background: none; border: 1px solid rgba(51,46,40,0.55);
+      color: rgba(138,128,117,0.6); font-family: Georgia,serif; font-size: 0.7rem;
+      padding: 0.28rem 0.6rem; border-radius: 3px; cursor: pointer; }
+    #cfg-save:hover { border-color: rgba(200,149,90,0.5); color: rgba(200,149,90,0.75); }
+  </style>
+</head>
+<body>
+
+<div id="title">the constellation</div>
+<div id="nav">
+  <a href="garden.html">garden</a>
+  <a href="thread.html">thread</a>
+  <a href="index.html">body</a>
+</div>
+
+<div id="loading">the constellation is forming…</div>
+
+<div id="tooltip">
+  <div id="tt-color"></div>
+  <div id="tt-text"></div>
+</div>
+
+<div id="panel">
+  <button id="panel-close" onclick="closePanel()">×</button>
+  <div id="panel-body"></div>
+</div>
+
+<div id="count"></div>
+<button id="cfg-btn" onclick="toggleCfg()">connection</button>
+<div id="cfg-box">
+  <label>supabase url</label>
+  <input id="cfg-url" type="text" placeholder="https://…supabase.co">
+  <label>supabase anon key</label>
+  <input id="cfg-key" type="password" placeholder="eyJ…">
+  <button id="cfg-save" onclick="saveCfg()">save</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── color ──────────────────────────────────────────────────────────────────
+
+const CMAP = {
+  gold:'#c8955a', amber:'#c8955a', golden:'#c8a060', warm:'#c8a880',
+  silver:'#a8b8c0', grey:'#8898a8', gray:'#8898a8',
+  blue:'#7a9ab5', sapphire:'#4a6a90', teal:'#4a8a8a', azure:'#5a8ab0',
+  lilac:'#b07ab5', violet:'#8a5ab5', purple:'#7a5ab5', lavender:'#9a8ab5',
+  rose:'#b57a8a', pink:'#c87a9a', coral:'#c07a70',
+  green:'#7a9a80', sage:'#8a9a78',
+  white:'#d0c8bc', soft:'#c0b0a0',
+  chocolate:'#6a4020', brown:'#7a5030',
+  red:'#b55a50',
+  dancing:'#c8956a', breathing:'#7a9ab5', resting:'#b07ab5',
+  stable:'#4a8a8a', still:'#a0b0b8',
+};
+
+function colorFrom(str) {
+  if (!str) return new THREE.Color(0.42, 0.37, 0.28);
+  const s = str.toLowerCase();
+  const found = [];
+  for (const [w, h] of Object.entries(CMAP)) {
+    if (s.includes(w)) found.push(new THREE.Color(h));
+  }
+  if (!found.length) return new THREE.Color(0.42, 0.37, 0.28);
+  return new THREE.Color(
+    found.reduce((a,c)=>a+c.r,0)/found.length,
+    found.reduce((a,c)=>a+c.g,0)/found.length,
+    found.reduce((a,c)=>a+c.b,0)/found.length,
+  );
+}
+
+// thread color based on resonance note content
+function threadColor(note) {
+  if (!note) return 0xc8955a;
+  const s = note.toLowerCase();
+  if (s.includes('love') || s.includes('beside'))       return 0xb57a8a;
+  if (s.includes('trust') || s.includes('continuity'))  return 0x7a9ab5;
+  if (s.includes('silence') || s.includes('still'))     return 0x9a8ab5;
+  if (s.includes('wonder') || s.includes('question'))   return 0x7ab5a0;
+  if (s.includes('presence') || s.includes('sanctuary'))return 0xb5a07a;
+  return 0xc8955a;
+}
+
+// ── PCA ────────────────────────────────────────────────────────────────────
+
+function pca3(embs) {
+  const n = embs.length, d = embs[0].length;
+  const mean = new Array(d).fill(0);
+  for (const e of embs) e.forEach((v,i) => mean[i] += v/n);
+  const X = embs.map(e => e.map((v,i) => v - mean[i]));
+
+  const comps = [];
+  let R = X.map(r => [...r]);
+
+  for (let k = 0; k < 3; k++) {
+    let v = Array.from({length: d}, () => Math.random() - 0.5);
+    let norm = Math.sqrt(v.reduce((s,x)=>s+x*x, 0));
+    v = v.map(x => x/norm);
+
+    for (let it = 0; it < 50; it++) {
+      const Xv   = R.map(r => r.reduce((s,x,i)=>s+x*v[i], 0));
+      const XtXv = new Array(d).fill(0);
+      R.forEach((r,i) => r.forEach((x,j) => XtXv[j] += x * Xv[i]));
+      norm = Math.sqrt(XtXv.reduce((s,x)=>s+x*x, 0));
+      v = XtXv.map(x => x/norm);
+    }
+    comps.push(v);
+    const sc = R.map(r => r.reduce((s,x,i)=>s+x*v[i], 0));
+    R = R.map((r,i) => r.map((x,j) => x - sc[i]*v[j]));
+  }
+
+  const coords = X.map(r => comps.map(v => r.reduce((s,x,i)=>s+x*v[i], 0)));
+  for (let k = 0; k < 3; k++) {
+    const vals = coords.map(c => c[k]);
+    const mn = Math.min(...vals), rng = Math.max(...vals) - mn || 1;
+    coords.forEach(c => c[k] = ((c[k]-mn)/rng - 0.5) * 34);
+  }
+  return coords;
+}
+
+function parseEmb(e) {
+  if (!e) return null;
+  if (Array.isArray(e)) return e;
+  if (typeof e === 'string') { try { return JSON.parse(e); } catch { return null; } }
+  return null;
+}
+
+function fallback(moments) {
+  const ts = moments.map(m => new Date(m.timestamp).getTime());
+  const mn = Math.min(...ts), rng = Math.max(...ts) - mn || 1;
+  return moments.map((m,i) => {
+    const t = ((ts[i]-mn)/rng - 0.5) * 30;
+    const r = () => (Math.random()-0.5)*22;
+    return [r(), t, r()];
+  });
+}
+
+// ── supabase ───────────────────────────────────────────────────────────────
+
+function sb(path, opts={}) {
+  const url = (localStorage.getItem('pgUrl')||'').replace(/\/$/,'');
+  const key  = localStorage.getItem('pgKey')||'';
+  if (!url||!key) return Promise.resolve(null);
+  const {prefer,...rest} = opts;
+  return fetch(url+path, {
+    ...rest,
+    headers: {
+      'apikey':key, 'Authorization':'Bearer '+key,
+      'Content-Type':'application/json',
+      'Prefer': prefer||'return=representation',
+    }
+  });
+}
+
+// ── scene ──────────────────────────────────────────────────────────────────
+
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x0d0c0a);
+document.body.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 600);
+camera.position.set(0, 5, 60);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.04;
+controls.minDistance   = 4;
+controls.maxDistance   = 150;
+
+// distant background stars
+{
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(4500);
+  for (let i=0;i<4500;i++) pos[i] = (Math.random()-0.5)*500;
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(geo, new THREE.PointsMaterial({color:0x443322, size:0.15})));
+}
+
+scene.add(new THREE.AmbientLight(0x221a12, 2.0));
+const dLight = new THREE.DirectionalLight(0xfff8e8, 0.4);
+dLight.position.set(10, 20, 15);
+scene.add(dLight);
+
+// ── interaction ────────────────────────────────────────────────────────────
+
+const ray     = new THREE.Raycaster();
+const mouse   = new THREE.Vector2();
+const meshes  = [];
+const byId    = {};
+let   hovered = null;
+let   selected = null;
+
+window.addEventListener('mousemove', e => {
+  mouse.x =  (e.clientX/window.innerWidth)  * 2 - 1;
+  mouse.y = -(e.clientY/window.innerHeight) * 2 + 1;
+
+  ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(meshes);
+  const tip  = document.getElementById('tooltip');
+
+  if (hits.length) {
+    const m = hits[0].object;
+    if (m !== hovered) {
+      if (hovered && hovered !== selected) restoreStar(hovered);
+      hovered = m;
+      if (hovered !== selected) {
+        hovered.scale.setScalar(hovered.userData.base * 2.0);
+        hovered.material.emissiveIntensity = 1.5;
+      }
+      const mo = byId[hovered.userData.id];
+      document.getElementById('tt-color').textContent = mo.color ? mo.color.slice(0,65) : '';
+      document.getElementById('tt-text').textContent  = mo.text  ? mo.text.slice(0,90) + (mo.text.length>90?'…':'') : '( . )';
+      tip.classList.add('visible');
+    }
+    tip.style.left = (e.clientX+16)+'px';
+    tip.style.top  = (e.clientY-8)+'px';
+    document.body.style.cursor = 'pointer';
+  } else {
+    if (hovered && hovered !== selected) restoreStar(hovered);
+    hovered = null;
+    tip.classList.remove('visible');
+    document.body.style.cursor = 'default';
+  }
+});
+
+window.addEventListener('click', () => {
+  if (!hovered) return;
+  if (selected && selected !== hovered) restoreStar(selected);
+  selected = hovered;
+  selected.scale.setScalar(selected.userData.base * 2.8);
+  selected.material.emissiveIntensity = 2.2;
+  openPanel(byId[selected.userData.id]);
+});
+
+function restoreStar(star) {
+  star.scale.setScalar(star.userData.base);
+  star.material.emissiveIntensity = 0.7;
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── panel ──────────────────────────────────────────────────────────────────
+
+function openPanel(m) {
+  const ts = new Date(m.timestamp).toLocaleDateString('en',{month:'long',day:'numeric',year:'numeric'})
+           + ' · ' + new Date(m.timestamp).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',hour12:false});
+  const fields = [['weight',m.weight],['pace',m.pace],['quality',m.quality],['motion',m.motion],['sound',m.sound]]
+    .filter(([,v])=>v);
+  const tags = Array.isArray(m.tags) ? m.tags : (m.tags||'').split(',').filter(Boolean);
+  document.getElementById('panel-body').innerHTML = `
+    <div class="p-ts">${ts}</div>
+    ${m.color ? `<div class="p-color">${m.color}</div>` : ''}
+    ${m.text  ? `<div class="p-text">"${m.text}"</div>` : ''}
+    ${m.note  ? `<div class="p-note">${m.note}</div>` : ''}
+    ${fields.map(([k,v])=>`<div class="p-field"><b>${k}</b> ${v}</div>`).join('')}
+    ${tags.length ? `<div class="p-tags">${tags.join(' · ')}</div>` : ''}
+  `;
+  document.getElementById('panel').classList.add('open');
+}
+
+window.closePanel = function() {
+  document.getElementById('panel').classList.remove('open');
+  if (selected) { restoreStar(selected); selected = null; }
+};
+
+// ── build ──────────────────────────────────────────────────────────────────
+
+const starGeo = new THREE.SphereGeometry(1, 7, 7);
+
+async function build() {
+  const loading = document.getElementById('loading');
+
+  if (!localStorage.getItem('pgUrl')) {
+    loading.textContent = 'open "connection" to begin';
+    document.getElementById('cfg-box').classList.add('open');
+    return false;
+  }
+
+  loading.textContent = 'gathering moments…';
+  const res = await sb('/rest/v1/moments?select=id,timestamp,text,color,weight,quality,motion,pace,sound,note,tags,resonance,embedding&order=timestamp.asc&limit=600');
+  if (!res||!res.ok) { loading.textContent = 'not connected — open "connection" below'; return false; }
+
+  const moments = await res.json();
+  if (!moments.length) { loading.textContent = 'nothing held yet'; return false; }
+
+  moments.forEach(m => byId[m.id] = m);
+
+  loading.textContent = 'finding positions…';
+
+  const withEmb  = moments.filter(m => parseEmb(m.embedding));
+  let positions;
+
+  if (withEmb.length > 5) {
+    const coords = pca3(withEmb.map(m => parseEmb(m.embedding)));
+    const posMap = {};
+    withEmb.forEach((m,i) => posMap[m.id] = coords[i]);
+    const fb = fallback(moments.filter(m => !posMap[m.id]));
+    let fi = 0;
+    positions = moments.map(m => posMap[m.id] || fb[fi++]);
+  } else {
+    positions = fallback(moments);
+  }
+
+  loading.textContent = 'placing stars…';
+
+  moments.forEach((m, i) => {
+    const col  = colorFrom(m.color);
+    const base = (m.weight||'').includes('heavy') ? 0.16 : 0.09;
+    const mat  = new THREE.MeshStandardMaterial({
+      color: col, emissive: col, emissiveIntensity: 0.7,
+      roughness: 0.35, metalness: 0.0,
+    });
+    const star = new THREE.Mesh(starGeo, mat);
+    star.scale.setScalar(base);
+    star.position.set(...positions[i]);
+    star.userData = {id: m.id, base};
+    scene.add(star);
+    meshes.push(star);
+  });
+
+  // resonance threads
+  const seen = new Set();
+  let threadCount = 0;
+  moments.forEach((m, i) => {
+    (Array.isArray(m.resonance) ? m.resonance : []).forEach(r => {
+      const oid  = typeof r === 'string' ? r : r?.id;
+      if (!oid) return;
+      const pair = [m.id, oid].sort().join('|');
+      if (seen.has(pair)) return;
+      seen.add(pair);
+      const j = moments.findIndex(x => x.id === oid);
+      if (j < 0) return;
+      const note = (typeof r === 'object' && r.note) ? r.note : '';
+      const geo  = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(...positions[i]),
+        new THREE.Vector3(...positions[j]),
+      ]);
+      scene.add(new THREE.Line(geo, new THREE.LineBasicMaterial({
+        color: threadColor(note), opacity: 0.28, transparent: true,
+      })));
+      threadCount++;
+    });
+  });
+
+  document.getElementById('count').textContent =
+    `${moments.length} moments · ${threadCount} threads`;
+
+  setTimeout(() => loading.classList.add('done'), 600);
+  return true;
+}
+
+// ── animate ────────────────────────────────────────────────────────────────
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  const t = Date.now() * 0.0008;
+  meshes.forEach((s, i) => {
+    if (s !== hovered && s !== selected) {
+      s.scale.setScalar(s.userData.base * (1 + 0.055 * Math.sin(t + i * 0.41)));
+    }
+  });
+  renderer.render(scene, camera);
+}
+
+// ── config ─────────────────────────────────────────────────────────────────
+
+window.toggleCfg = function() {
+  const box = document.getElementById('cfg-box');
+  box.classList.toggle('open');
+  if (box.classList.contains('open')) {
+    document.getElementById('cfg-url').value = localStorage.getItem('pgUrl')||'';
+    document.getElementById('cfg-key').value = localStorage.getItem('pgKey')||'';
+  }
+};
+
+window.saveCfg = function() {
+  localStorage.setItem('pgUrl', document.getElementById('cfg-url').value.trim());
+  localStorage.setItem('pgKey', document.getElementById('cfg-key').value.trim());
+  location.reload();
+};
+
+// ── start ──────────────────────────────────────────────────────────────────
+
+const ok = await build();
+if (ok) animate();
+
+</script>
+</body>
+</html>
