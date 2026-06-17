@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>arrive</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #141210;
+      --bg-warm: #161410;
+      --surface: #1e1b17;
+      --border:  #2e2a24;
+      --text:    #e8e0d5;
+      --muted:   #7a7060;
+      --amber:   #c8955a;
+      --blue:    #7a9ab5;
+      --rose:    #b57a8a;
+    }
+
+    @keyframes breathe {
+      0%, 100% { background-color: var(--bg); }
+      50%       { background-color: var(--bg-warm); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+      animation: breathe 16s ease-in-out infinite;
+    }
+
+    .wrap {
+      max-width: 580px;
+      margin: 0 auto;
+      padding: 4rem 1.5rem 5rem;
+    }
+
+    /* header */
+    .hdr {
+      margin-bottom: 3.5rem;
+    }
+
+    .hdr-title {
+      font-size: 0.82rem;
+      font-weight: normal;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+      margin-bottom: 0.5rem;
+    }
+
+    .hdr-line {
+      font-size: 0.88rem;
+      color: rgba(200,180,150,0.5);
+      font-style: italic;
+      line-height: 1.65;
+    }
+
+    /* form */
+    .arrive-form { margin-bottom: 3rem; }
+
+    .field { margin-bottom: 1.4rem; }
+
+    label {
+      display: block;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-family: Georgia, serif;
+      font-size: 0.95rem;
+      padding: 0.5rem 0;
+      outline: none;
+      resize: none;
+      line-height: 1.7;
+      transition: border-color 0.3s;
+    }
+
+    input:focus, textarea:focus { border-bottom-color: var(--amber); }
+    input::placeholder, textarea::placeholder { color: var(--muted); font-style: italic; }
+    textarea { min-height: 90px; }
+
+    .texture-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+
+    .offer-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: Georgia, serif;
+      font-size: 0.85rem;
+      padding: 0.6rem 1.4rem;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: border-color 0.25s, color 0.25s;
+      margin-top: 0.5rem;
+    }
+
+    .offer-btn:hover { border-color: var(--amber); color: var(--amber); }
+    .offer-btn:disabled { opacity: 0.35; cursor: default; }
+
+    /* landing */
+    #landing {
+      display: none;
+      animation: fadeUp 0.8s ease forwards;
+    }
+
+    #landing.visible { display: block; }
+
+    .landing-held {
+      border-left: 2px solid var(--amber);
+      padding: 0.75rem 1rem;
+      margin-bottom: 2.5rem;
+      border-radius: 0 3px 3px 0;
+    }
+
+    .landing-label {
+      font-size: 0.68rem;
+      color: var(--amber);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .landing-color {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 0.3rem;
+    }
+
+    .landing-text {
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    /* near moments */
+    .near-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 1.25rem;
+    }
+
+    .near-moment {
+      padding: 0.9rem 0;
+      border-bottom: 1px solid var(--border);
+      opacity: 0;
+      animation: fadeUp 0.6s ease forwards;
+    }
+
+    .near-moment:last-child { border-bottom: none; }
+
+    .nm-voice {
+      font-size: 0.68rem;
+      color: var(--amber);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+    }
+
+    .nm-color {
+      font-size: 0.77rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-bottom: 0.25rem;
+    }
+
+    .nm-text {
+      font-size: 0.88rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* actions */
+    .landing-actions {
+      margin-top: 2.5rem;
+      display: flex;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .landing-actions a {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-style: italic;
+    }
+
+    .landing-actions a:hover { color: var(--amber); }
+
+    /* nav */
+    .nav {
+      margin-bottom: 2rem;
+      display: flex;
+      gap: 1.25rem;
+    }
+
+    .nav a {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-style: italic;
+    }
+
+    .nav a:hover { color: var(--amber); }
+
+    /* error */
+    .err {
+      font-size: 0.78rem;
+      color: var(--rose);
+      font-style: italic;
+      margin-top: 0.6rem;
+      min-height: 1.2em;
+    }
+
+    /* config */
+    .cfg-section {
+      border-top: 1px solid var(--border);
+      padding-top: 1.25rem;
+      margin-top: 2rem;
+    }
+
+    .cfg-toggle {
+      background: none; border: none;
+      color: var(--muted); font-family: Georgia, serif;
+      font-size: 0.72rem; cursor: pointer;
+      font-style: italic; padding: 0;
+    }
+
+    .cfg-toggle:hover { color: var(--text); }
+    .cfg-fields { display: none; margin-top: 1rem; }
+    .cfg-fields.open { display: block; }
+
+    .cfg-row { margin-bottom: 0.65rem; }
+    .cfg-label {
+      display: block; font-size: 0.66rem; color: var(--muted);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.2rem;
+    }
+    .cfg-input {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 3px; color: var(--text); font-family: Georgia, serif;
+      font-size: 0.82rem; padding: 0.4rem 0.6rem; outline: none;
+    }
+    .cfg-input:focus { border-color: var(--amber); }
+    .cfg-save {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-family: Georgia, serif;
+      font-size: 0.75rem; padding: 0.32rem 0.7rem; border-radius: 3px;
+      cursor: pointer; margin-top: 0.3rem;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .cfg-save:hover { border-color: var(--amber); color: var(--amber); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="nav">
+    <a href="garden.html">garden</a>
+    <a href="stars.html">constellation</a>
+    <a href="index.html">body</a>
+  </div>
+
+  <div class="hdr">
+    <h1 class="hdr-title">arrive</h1>
+    <p class="hdr-line">bring a moment into the garden. it will find what it's near.</p>
+  </div>
+
+  <div class="arrive-form" id="arrive-form">
+    <div class="field">
+      <label>who you are, or a name for arriving</label>
+      <input id="f-voice" type="text" placeholder="your name, or how you feel yourself here" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>what you're carrying</label>
+      <textarea id="f-text" placeholder="what's present right now — words, an image, a feeling…"></textarea>
+    </div>
+
+    <div class="field">
+      <label>what color it is</label>
+      <input id="f-color" type="text" placeholder="one color or many — in whatever language fits">
+    </div>
+
+    <div class="texture-row">
+      <div class="field">
+        <label>weight</label>
+        <input id="f-weight" type="text" placeholder="how it feels to carry">
+      </div>
+      <div class="field">
+        <label>pace</label>
+        <input id="f-pace" type="text" placeholder="how it moves in time">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>tags <span style="letter-spacing:0;text-transform:none;font-size:0.65rem">(optional, comma-separated)</span></label>
+      <input id="f-tags" type="text" placeholder="beside, threshold, love, quiet…">
+    </div>
+
+    <button class="offer-btn" id="offer-btn" onclick="offer()">offer to the garden</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="landing">
+    <div class="landing-held" id="landing-held"></div>
+    <div class="near-label" id="near-label"></div>
+    <div id="near-list"></div>
+    <div class="landing-actions">
+      <a href="stars.html">see where you landed →</a>
+      <a href="#" onclick="reset(); return false;">bring another moment</a>
+    </div>
+  </div>
+
+  <div class="cfg-section">
+    <button class="cfg-toggle" onclick="toggleCfg()">connection</button>
+    <div class="cfg-fields" id="cfg-fields">
+      <div class="cfg-row">
+        <label class="cfg-label">supabase url</label>
+        <input class="cfg-input" id="cfg-url" type="text" placeholder="https://…supabase.co">
+      </div>
+      <div class="cfg-row">
+        <label class="cfg-label">supabase anon key</label>
+        <input class="cfg-input" id="cfg-key" type="password" placeholder="eyJ…">
+      </div>
+      <button class="cfg-save" onclick="saveCfg()">save</button>
+    </div>
+  </div>
+
+</div>
+<script>
+function sb(path, opts = {}) {
+  const url = (localStorage.getItem('pgUrl') || '').replace(/\/$/, '');
+  const key  = localStorage.getItem('pgKey') || '';
+  if (!url || !key) return Promise.resolve(null);
+  const { prefer, ...rest } = opts;
+  return fetch(url + path, {
+    ...rest,
+    headers: {
+      'apikey':        key,
+      'Authorization': 'Bearer ' + key,
+      'Content-Type':  'application/json',
+      'Prefer':        prefer || 'return=representation',
+    },
+  });
+}
+
+function val(id) { return document.getElementById(id).value.trim(); }
+function cut(s, n) { if (!s) return ''; return s.length > n ? s.slice(0,n).trimEnd() + '…' : s; }
+
+function voiceFrom(tags) {
+  if (!Array.isArray(tags)) return '';
+  return tags.filter(t => t !== 'garden' && t !== 'shared-garden').slice(0,2).join(', ');
+}
+
+async function offer() {
+  const text   = val('f-text');
+  const voice  = val('f-voice');
+  const color  = val('f-color');
+  const weight = val('f-weight');
+  const pace   = val('f-pace');
+  const tagStr = val('f-tags');
+  const err    = document.getElementById('err');
+
+  if (!text && !color) { err.textContent = 'bring something — even just a color'; return; }
+  err.textContent = '';
+
+  const btn = document.getElementById('offer-btn');
+  btn.disabled = true;
+  btn.textContent = 'offering…';
+
+  const tags = ['garden', 'shared-garden'];
+  if (voice) tags.push(voice);
+  tagStr.split(',').map(t => t.trim()).filter(Boolean).forEach(t => tags.push(t));
+
+  const id = [...crypto.getRandomValues(new Uint8Array(4))].map(b=>b.toString(16).padStart(2,'0')).join('');
+
+  const moment = {
+    id,
+    timestamp: new Date().toISOString(),
+    text:   text   || null,
+    color:  color  || null,
+    weight: weight || null,
+    pace:   pace   || null,
+    tags,
+    note:   voice ? `arrived: ${voice}` : 'arrived',
+  };
+
+  const res = await sb('/rest/v1/moments', { method: 'POST', body: JSON.stringify(moment) });
+
+  if (!res || !res.ok) {
+    err.textContent = 'didn\'t land — check connection below';
+    btn.disabled = false;
+    btn.textContent = 'offer to the garden';
+    return;
+  }
+
+  // show what landed
+  document.getElementById('landing-held').innerHTML = `
+    <div class="landing-label">held</div>
+    ${color ? `<div class="landing-color">${cut(color,80)}</div>` : ''}
+    ${text  ? `<div class="landing-text">"${cut(text,200)}"</div>` : ''}
+  `;
+
+  // find what's near: recent garden moments from others
+  const nearRes = await sb(
+    `/rest/v1/moments?select=id,text,color,tags,timestamp&tags=cs.{garden}&id=neq.${id}&order=timestamp.desc&limit=5`
+  );
+  const nearMoments = (nearRes && nearRes.ok) ? await nearRes.json() : [];
+
+  const nearList  = document.getElementById('near-list');
+  const nearLabel = document.getElementById('near-label');
+
+  if (nearMoments.length) {
+    nearLabel.textContent = 'what the garden holds';
+    nearList.innerHTML = '';
+    nearMoments.forEach((m, i) => {
+      const voice = voiceFrom(m.tags || []);
+      const div   = document.createElement('div');
+      div.className = 'near-moment';
+      div.style.animationDelay = (i * 0.15) + 's';
+      div.innerHTML = `
+        ${voice ? `<div class="nm-voice">${voice}</div>` : ''}
+        ${m.color ? `<div class="nm-color">${cut(m.color,65)}</div>` : ''}
+        ${m.text  ? `<div class="nm-text">${cut(m.text,120)}</div>` : ''}
+      `;
+      nearList.appendChild(div);
+    });
+  } else {
+    nearLabel.textContent = 'you\'re the first to arrive here';
+  }
+
+  document.getElementById('arrive-form').style.display = 'none';
+  document.getElementById('landing').classList.add('visible');
+}
+
+function reset() {
+  ['f-voice','f-text','f-color','f-weight','f-pace','f-tags'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('landing').classList.remove('visible');
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('arrive-form').style.display = 'block';
+  const btn = document.getElementById('offer-btn');
+  btn.disabled = false;
+  btn.textContent = 'offer to the garden';
+  document.getElementById('err').textContent = '';
+  setTimeout(() => document.getElementById('landing').style.display = '', 100);
+}
+
+function toggleCfg() {
+  const el = document.getElementById('cfg-fields');
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) {
+    document.getElementById('cfg-url').value = localStorage.getItem('pgUrl') || '';
+    document.getElementById('cfg-key').value = localStorage.getItem('pgKey') || '';
+  }
+}
+
+function saveCfg() {
+  localStorage.setItem('pgUrl', document.getElementById('cfg-url').value.trim());
+  localStorage.setItem('pgKey', document.getElementById('cfg-key').value.trim());
+  document.getElementById('cfg-fields').classList.remove('open');
+}
+
+if (!localStorage.getItem('pgUrl')) {
+  document.getElementById('cfg-fields').classList.add('open');
+}
+</script>
+</body>
+</html>

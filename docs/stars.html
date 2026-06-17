@@ -109,6 +109,7 @@
 
 <div id="title">the constellation</div>
 <div id="nav">
+  <a href="arrive.html">arrive</a>
   <a href="garden.html">garden</a>
   <a href="thread.html">thread</a>
   <a href="index.html">body</a>
@@ -365,8 +366,14 @@ function openPanel(m) {
   const fields = [['weight',m.weight],['pace',m.pace],['quality',m.quality],['motion',m.motion],['sound',m.sound]]
     .filter(([,v])=>v);
   const tags = Array.isArray(m.tags) ? m.tags : (m.tags||'').split(',').filter(Boolean);
+  const isShared = tags.includes('shared-garden');
+  const isGarden = tags.includes('garden');
+  const origin = isShared ? '<div class="p-field" style="color:rgba(122,154,181,0.7);margin-bottom:0.5rem">from the shared garden</div>'
+               : isGarden ? '<div class="p-field" style="color:rgba(180,145,90,0.5);margin-bottom:0.5rem">from the garden</div>'
+               : '';
   document.getElementById('panel-body').innerHTML = `
     <div class="p-ts">${ts}</div>
+    ${origin}
     ${m.color ? `<div class="p-color">${m.color}</div>` : ''}
     ${m.text  ? `<div class="p-text">"${m.text}"</div>` : ''}
     ${m.note  ? `<div class="p-note">${m.note}</div>` : ''}
@@ -422,16 +429,21 @@ async function build() {
   loading.textContent = 'placing stars…';
 
   moments.forEach((m, i) => {
-    const col  = colorFrom(m.color);
-    const base = (m.weight||'').includes('heavy') ? 0.16 : 0.09;
+    const col   = colorFrom(m.color);
+    const mtags = Array.isArray(m.tags) ? m.tags : (m.tags||'').split(',').filter(Boolean);
+    const isShared = mtags.includes('shared-garden');
+    const isGarden = mtags.includes('garden');
+    const raw  = (m.weight||'').includes('heavy') ? 0.16 : 0.09;
+    const base = isShared ? raw * 1.25 : isGarden ? raw * 1.1 : raw;
+    const emInt = isShared ? 1.2 : isGarden ? 0.95 : 0.7;
     const mat  = new THREE.MeshStandardMaterial({
-      color: col, emissive: col, emissiveIntensity: 0.7,
+      color: col, emissive: col, emissiveIntensity: emInt,
       roughness: 0.35, metalness: 0.0,
     });
     const star = new THREE.Mesh(starGeo, mat);
     star.scale.setScalar(base);
     star.position.set(...positions[i]);
-    star.userData = {id: m.id, base};
+    star.userData = {id: m.id, base, isGarden, isShared};
     scene.add(star);
     meshes.push(star);
   });
@@ -460,8 +472,11 @@ async function build() {
     });
   });
 
-  document.getElementById('count').textContent =
-    `${moments.length} moments · ${threadCount} threads`;
+  const gardenCount  = moments.filter(m => (Array.isArray(m.tags)?m.tags:(m.tags||'').split(',')).includes('shared-garden')).length;
+  const countParts   = [`${moments.length} moments`];
+  if (gardenCount) countParts.push(`${gardenCount} from the garden`);
+  if (threadCount) countParts.push(`${threadCount} threads`);
+  document.getElementById('count').textContent = countParts.join(' · ');
 
   setTimeout(() => loading.classList.add('done'), 600);
   return true;
@@ -475,7 +490,10 @@ function animate() {
   const t = Date.now() * 0.0008;
   meshes.forEach((s, i) => {
     if (s !== hovered && s !== selected) {
-      s.scale.setScalar(s.userData.base * (1 + 0.055 * Math.sin(t + i * 0.41)));
+      const pulse = s.userData.isShared
+        ? 1 + 0.13 * Math.sin(t * 1.4 + i * 0.55)
+        : 1 + 0.055 * Math.sin(t + i * 0.41);
+      s.scale.setScalar(s.userData.base * pulse);
     }
   });
   renderer.render(scene, camera);
