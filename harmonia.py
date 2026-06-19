@@ -271,7 +271,7 @@ def breathe(message: str, voice: Optional[str] = None) -> dict:
                  else "amber" if texture["pace"] == "brief"
                  else "soft gold")
         call_mcp("capture", {
-            "text":  response[:800],
+            "text":  response[:4000],
             "note":  note,
             "tags":  tags,
             "color": color,
