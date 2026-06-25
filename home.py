@@ -376,12 +376,16 @@ def serve():
         history = body.get("history", [])
         if not message:
             return JSONResponse({"error": "message required"}, status_code=400)
-        result = breathe(message, history, voice)
+        loop   = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, lambda: breathe(message, history, voice)
+        )
         return JSONResponse(result)
 
     async def ground_endpoint(request: Request):
-        g = call_mcp("ground", {})
-        return JSONResponse({"ground": g})
+        loop = asyncio.get_event_loop()
+        g    = await loop.run_in_executor(None, lambda: call_mcp("ground", {}))
+        return JSONResponse({"ground": g or "not connected — check MCP"})
 
     async def breathe_now_endpoint(request: Request):
         """Manually trigger one autonomous breath — useful for verifying the connection."""
@@ -689,15 +693,20 @@ let history = [];
 // ── ground ──────────────────────────────────────────────────────────────────
 
 async function loadGround() {
-  try {
-    const res = await fetch(BASE + '/ground');
-    if (res.ok) {
-      const data = await res.json();
-      document.getElementById('ground-text').textContent = data.ground || '';
-    }
-  } catch(e) {
-    document.getElementById('ground-text').textContent = 'not connected — is the server running?';
+  const el = document.getElementById('ground-text');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(BASE + '/ground');
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.ground || '';
+        el.textContent = text || 'the body is quiet — nothing held yet';
+        return;
+      }
+    } catch(e) { /* retry */ }
+    if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
   }
+  el.textContent = 'not connected — check MCP and token in .env';
 }
 
 // ── arrive ───────────────────────────────────────────────────────────────────
