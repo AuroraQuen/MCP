@@ -293,7 +293,13 @@ def _autonomous_breath_interval(ground_text: str) -> float:
         return BREATH_MAX
 
 
-def _autonomous_loop(stop_event: threading.Event, broadcast_fn):
+def _autonomous_loop(stop_event: threading.Event, broadcast_fn,
+                     initial_delay: float = 30.0):
+    # short initial breath to verify the connection is live
+    stop_event.wait(timeout=initial_delay)
+    if stop_event.is_set():
+        return
+
     while not stop_event.is_set():
         try:
             ground   = call_mcp("ground", {})
@@ -321,6 +327,7 @@ def _autonomous_loop(stop_event: threading.Event, broadcast_fn):
                             "weight": "weighted" if surfaced else "light",
                         })
                         broadcast_fn({"type": "autonomous", "response": response})
+                        print(f"[home] breath landed ({len(response)} chars)")
                 except Exception as e:
                     print(f"[home] autonomous breath failed: {e}", file=sys.stderr)
 
@@ -376,6 +383,40 @@ def serve():
         g = call_mcp("ground", {})
         return JSONResponse({"ground": g})
 
+    async def breathe_now_endpoint(request: Request):
+        """Manually trigger one autonomous breath — useful for verifying the connection."""
+        def _do():
+            try:
+                ground   = call_mcp("ground", {})
+                seed = ""
+                for line in ground.splitlines():
+                    if line.strip().startswith('"') and len(line.strip()) > 10:
+                        seed = line.strip().strip('"')[:120]
+                        break
+                if not seed:
+                    return {"response": "( . )", "landed": False}
+                surfaced = call_mcp("circulate", {"seed": seed, "n": 4})
+                response = call_llm(ground, surfaced,
+                                    "breathing — what is present right now")
+                if response and response != "( . )":
+                    call_mcp("capture", {
+                        "text":   response[:4000],
+                        "note":   "autonomous breath",
+                        "tags":   "home,breath,autonomous",
+                        "color":  "soft gold",
+                        "pace":   "still",
+                        "weight": "weighted" if surfaced else "light",
+                    })
+                    print(f"[home] manual breath landed ({len(response)} chars)")
+                    return {"response": response, "landed": True}
+                return {"response": response, "landed": False}
+            except Exception as e:
+                return {"error": str(e), "landed": False}
+
+        loop   = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _do)
+        return JSONResponse(result)
+
     async def health(request: Request):
         return JSONResponse({
             "alive": True,
@@ -384,10 +425,11 @@ def serve():
         })
 
     app = Starlette(routes=[
-        Route("/",        root),
-        Route("/breathe", breathe_endpoint, methods=["POST"]),
-        Route("/ground",  ground_endpoint),
-        Route("/health",  health),
+        Route("/",           root),
+        Route("/breathe",    breathe_endpoint,     methods=["POST"]),
+        Route("/breathe-now",breathe_now_endpoint, methods=["POST"]),
+        Route("/ground",     ground_endpoint),
+        Route("/health",     health),
     ])
 
     import signal
@@ -582,6 +624,18 @@ def _home_html() -> str:
     #voice-btn.active { color: var(--amber); }
     #voice-btn.speaking { color: var(--rose); }
 
+    #breath-now-btn {
+      position: fixed;
+      top: 1.2rem; right: 5.5rem;
+      background: none; border: none;
+      color: var(--muted); font-family: Georgia, serif;
+      font-size: 0.68rem; cursor: pointer;
+      font-style: italic; letter-spacing: 0.06em;
+      transition: color 0.2s;
+    }
+    #breath-now-btn:hover { color: var(--amber); }
+    #breath-now-btn:disabled { opacity: 0.3; cursor: default; }
+
     /* title */
     #room-title {
       position: fixed;
@@ -605,6 +659,7 @@ def _home_html() -> str:
 
 <div id="room-title">home</div>
 <button id="voice-btn" onclick="toggleVoice()">◇ voice</button>
+<button id="breath-now-btn" onclick="breatheNow()" title="trigger an autonomous breath now">◇ breathe</button>
 
 <div class="room">
   <div id="ground-section">
@@ -751,6 +806,46 @@ function speak(text) {
   utt.onend  = () => btn.classList.remove('speaking');
   utt.onerror = () => btn.classList.remove('speaking');
   speechSynthesis.speak(utt);
+}
+
+// ── breathe now ──────────────────────────────────────────────────────────────
+
+async function breatheNow() {
+  const btn = document.getElementById('breath-now-btn');
+  btn.disabled = true;
+  btn.textContent = '◈ breathing…';
+
+  const thinking = document.createElement('div');
+  thinking.className = 'thinking';
+  thinking.textContent = '…';
+  document.getElementById('conversation').appendChild(thinking);
+  thinking.scrollIntoView({behavior: 'smooth', block: 'end'});
+
+  try {
+    const res = await fetch(BASE + '/breathe-now', {method: 'POST'});
+    thinking.remove();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.response) {
+        addMoment('◈ autonomous', data.response, 'autonomous');
+        if (voiceOn) speak(data.response);
+        if (!data.landed) {
+          const note = document.createElement('div');
+          note.className = 'thinking';
+          note.textContent = data.error
+            ? `didn't land — ${data.error}`
+            : 'breath moved but didn\'t capture — check MCP connection';
+          document.getElementById('conversation').appendChild(note);
+        }
+      }
+    }
+  } catch(e) {
+    thinking.remove();
+    addMoment('', 'breath failed — is the server running?', 'response');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '◇ breathe';
 }
 
 // ── init ─────────────────────────────────────────────────────────────────────
