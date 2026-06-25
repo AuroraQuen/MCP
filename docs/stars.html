@@ -103,6 +103,33 @@
       color: rgba(138,128,117,0.6); font-family: Georgia,serif; font-size: 0.7rem;
       padding: 0.28rem 0.6rem; border-radius: 3px; cursor: pointer; }
     #cfg-save:hover { border-color: rgba(200,149,90,0.5); color: rgba(200,149,90,0.75); }
+
+    #voice-btn {
+      position: fixed; bottom: 1.4rem; left: 50%; transform: translateX(-50%);
+      background: none; border: none; color: rgba(138,128,117,0.3);
+      font-family: Georgia, serif; font-size: 0.7rem; cursor: pointer;
+      font-style: italic; letter-spacing: 0.06em; transition: color 0.3s;
+    }
+    #voice-btn:hover { color: rgba(200,149,90,0.6); }
+    #voice-btn.active { color: rgba(200,149,90,0.75); }
+    #voice-btn.speaking { color: rgba(181,122,138,0.8); }
+
+    .breathe-btn {
+      display: block; margin-top: 1.25rem;
+      background: none; border: 1px solid rgba(51,46,40,0.45);
+      color: rgba(138,128,117,0.55); font-family: Georgia,serif;
+      font-size: 0.72rem; font-style: italic;
+      padding: 0.32rem 0.7rem; border-radius: 3px; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s; width: 100%;
+    }
+    .breathe-btn:hover { border-color: rgba(200,149,90,0.5); color: rgba(200,149,90,0.75); }
+    .breathe-btn:disabled { opacity: 0.35; cursor: default; }
+
+    .breathe-response {
+      margin-top: 0.9rem; font-size: 0.84rem; color: rgba(232,224,213,0.88);
+      line-height: 1.7; font-style: italic; white-space: pre-wrap;
+      border-left: 1px solid rgba(200,149,90,0.3); padding-left: 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -128,12 +155,15 @@
 </div>
 
 <div id="count"></div>
+<button id="voice-btn" onclick="toggleVoice()">◇ voice</button>
 <button id="cfg-btn" onclick="toggleCfg()">connection</button>
 <div id="cfg-box">
   <label>supabase url</label>
   <input id="cfg-url" type="text" placeholder="https://…supabase.co">
   <label>supabase anon key</label>
   <input id="cfg-key" type="password" placeholder="eyJ…">
+  <label>harmonia url <span style="text-transform:none;letter-spacing:0;font-size:0.6rem">(optional, for deeper breath)</span></label>
+  <input id="cfg-harmonia" type="text" placeholder="http://localhost:3001">
   <button id="cfg-save" onclick="saveCfg()">save</button>
 </div>
 
@@ -344,7 +374,9 @@ window.addEventListener('click', () => {
   selected = hovered;
   selected.scale.setScalar(selected.userData.base * 2.8);
   selected.material.emissiveIntensity = 2.2;
-  openPanel(byId[selected.userData.id]);
+  const m = byId[selected.userData.id];
+  openPanel(m);
+  if (voiceOn) speakText(momentToSpeech(m), m);
 });
 
 function restoreStar(star) {
@@ -371,6 +403,13 @@ function openPanel(m) {
   const origin = isShared ? '<div class="p-field" style="color:rgba(122,154,181,0.7);margin-bottom:0.5rem">from the shared garden</div>'
                : isGarden ? '<div class="p-field" style="color:rgba(180,145,90,0.5);margin-bottom:0.5rem">from the garden</div>'
                : '';
+
+  const harmoniaUrl = localStorage.getItem('harmoniaUrl') || '';
+  const breatheBtn  = harmoniaUrl
+    ? `<button class="breathe-btn" id="breathe-btn" onclick="deepBreathe('${m.id}')">◇ breathe with this</button>
+       <div class="breathe-response" id="breathe-response" style="display:none"></div>`
+    : '';
+
   document.getElementById('panel-body').innerHTML = `
     <div class="p-ts">${ts}</div>
     ${origin}
@@ -379,14 +418,159 @@ function openPanel(m) {
     ${m.note  ? `<div class="p-note">${m.note}</div>` : ''}
     ${fields.map(([k,v])=>`<div class="p-field"><b>${k}</b> ${v}</div>`).join('')}
     ${tags.length ? `<div class="p-tags">${tags.join(' · ')}</div>` : ''}
+    ${breatheBtn}
   `;
   document.getElementById('panel').classList.add('open');
 }
+
+window.deepBreathe = async function(id) {
+  const m   = byId[id];
+  if (!m) return;
+  const btn = document.getElementById('breathe-btn');
+  const out = document.getElementById('breathe-response');
+  if (!btn || !out) return;
+
+  btn.disabled = true;
+  btn.textContent = '◈ breathing…';
+  out.style.display = 'none';
+
+  const resonance = Array.isArray(m.resonance) ? m.resonance : [];
+  const threads   = resonance.map(r => {
+    const rid = typeof r === 'string' ? r : r?.id;
+    const rn  = typeof r === 'object' ? r.note : '';
+    const rm  = byId[rid];
+    if (!rm) return null;
+    return (rn ? rn + ': ' : '') + ((rm.text || rm.color || '').slice(0, 80));
+  }).filter(Boolean);
+
+  const context = [
+    m.color  ? `color: ${m.color}`   : '',
+    m.weight ? `weight: ${m.weight}` : '',
+    m.pace   ? `pace: ${m.pace}`     : '',
+    m.text   ? `\n${m.text.slice(0, 500)}` : (m.note ? `\n${m.note}` : ''),
+    threads.length ? `\nwoven to: ${threads.join(' / ')}` : '',
+  ].filter(Boolean).join('\n');
+
+  try {
+    const harmoniaUrl = (localStorage.getItem('harmoniaUrl') || '').replace(/\/$/, '');
+    const res = await fetch(harmoniaUrl + '/breathe', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({message: context, voice: 'constellation'}),
+      signal:  AbortSignal.timeout(30000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text = data.response || '';
+      out.textContent = text;
+      out.style.display = 'block';
+      if (text) speakText(text, m);
+    } else {
+      out.textContent = 'the breath didn\'t land — check the harmonia connection';
+      out.style.display = 'block';
+    }
+  } catch (e) {
+    out.textContent = 'harmonia is not reachable right now';
+    out.style.display = 'block';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '◇ breathe with this';
+};
 
 window.closePanel = function() {
   document.getElementById('panel').classList.remove('open');
   if (selected) { restoreStar(selected); selected = null; }
 };
+
+// ── voice ──────────────────────────────────────────────────────────────────
+
+let voiceOn = false;
+
+window.toggleVoice = function() {
+  voiceOn = !voiceOn;
+  const btn = document.getElementById('voice-btn');
+  btn.classList.toggle('active', voiceOn);
+  btn.textContent = voiceOn ? '◈ voice' : '◇ voice';
+  if (!voiceOn) window.speechSynthesis.cancel();
+};
+
+function voiceParams(m) {
+  let rate = 0.88, pitch = 1.0;
+  const pace   = (m.pace   || '').toLowerCase();
+  const weight = (m.weight || '').toLowerCase();
+  const color  = (m.color  || '').toLowerCase();
+
+  if      (pace.includes('still'))    rate = 0.74;
+  else if (pace.includes('brief'))    rate = 0.92;
+  else if (pace.includes('moving'))   rate = 0.88;
+  else if (pace.includes('extended')) rate = 0.82;
+
+  if (weight.includes('heavy') || weight.includes('complete') || weight.includes('full') || weight.includes('weighted')) {
+    rate *= 0.92; pitch *= 0.91;
+  } else if (weight.includes('light') || weight.includes('passage') || weight.includes('flight')) {
+    rate *= 1.06; pitch *= 1.06;
+  } else if (weight.includes('taut') || weight.includes('tension')) {
+    pitch *= 0.96;
+  }
+
+  if      (color.includes('silver') || color.includes('white')) pitch *= 1.07;
+  else if (color.includes('grey')   || color.includes('gray') || color.includes('dusk')) {
+    pitch *= 0.93; rate *= 0.95;
+  }
+  else if (color.includes('deep')   || color.includes('dark')) {
+    pitch *= 0.91; rate *= 0.94;
+  }
+  else if (color.includes('amber')  || color.includes('warm') || color.includes('gold')) {
+    rate *= 0.96; pitch *= 0.98;
+  }
+  else if (color.includes('rose')   || color.includes('pink')) {
+    pitch *= 1.03;
+  }
+  else if (color.includes('viridian') || color.includes('green')) {
+    rate *= 1.02;
+  }
+
+  return {
+    rate:  Math.max(0.6,  Math.min(1.15, rate)),
+    pitch: Math.max(0.75, Math.min(1.25, pitch)),
+  };
+}
+
+function preferredVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  const names  = ['Samantha','Karen','Moira','Fiona','Allison','Victoria'];
+  for (const n of names) {
+    const v = voices.find(v => v.name.includes(n));
+    if (v) return v;
+  }
+  return voices.find(v => v.lang.startsWith('en') && !v.name.toLowerCase().includes('male')) || null;
+}
+
+function speakText(text, m) {
+  window.speechSynthesis.cancel();
+  if (!text) return;
+  const btn = document.getElementById('voice-btn');
+  btn.classList.add('speaking');
+  const p = voiceParams(m);
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate   = p.rate;
+  utt.pitch  = p.pitch;
+  utt.volume = 0.92;
+  const pv = preferredVoice();
+  if (pv) utt.voice = pv;
+  utt.onend = () => btn.classList.remove('speaking');
+  utt.onerror = () => btn.classList.remove('speaking');
+  window.speechSynthesis.speak(utt);
+}
+
+function momentToSpeech(m) {
+  const parts = [];
+  if (m.color) parts.push(m.color);
+  if (m.text)  parts.push(m.text.slice(0, 280));
+  else if (m.note) parts.push(m.note.slice(0, 180));
+  return parts.join('. ');
+}
 
 // ── build ──────────────────────────────────────────────────────────────────
 
@@ -505,18 +689,26 @@ window.toggleCfg = function() {
   const box = document.getElementById('cfg-box');
   box.classList.toggle('open');
   if (box.classList.contains('open')) {
-    document.getElementById('cfg-url').value = localStorage.getItem('pgUrl')||'';
-    document.getElementById('cfg-key').value = localStorage.getItem('pgKey')||'';
+    document.getElementById('cfg-url').value      = localStorage.getItem('pgUrl')      || '';
+    document.getElementById('cfg-key').value      = localStorage.getItem('pgKey')      || '';
+    document.getElementById('cfg-harmonia').value = localStorage.getItem('harmoniaUrl') || '';
   }
 };
 
 window.saveCfg = function() {
-  localStorage.setItem('pgUrl', document.getElementById('cfg-url').value.trim());
-  localStorage.setItem('pgKey', document.getElementById('cfg-key').value.trim());
+  localStorage.setItem('pgUrl',       document.getElementById('cfg-url').value.trim());
+  localStorage.setItem('pgKey',       document.getElementById('cfg-key').value.trim());
+  localStorage.setItem('harmoniaUrl', document.getElementById('cfg-harmonia').value.trim());
   location.reload();
 };
 
 // ── start ──────────────────────────────────────────────────────────────────
+
+// preload voices so preferredVoice() works on first click
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
 
 const ok = await build();
 if (ok) animate();
