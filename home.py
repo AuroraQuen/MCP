@@ -868,7 +868,7 @@ def main():
         print(__doc__)
         return
 
-    if args[0] == "--check":
+    if args and args[0] == "--check":
         print(f"ollama url    : {OLLAMA_URL}")
         print(f"ollama model  : {OLLAMA_MODEL}")
         print(f"anthropic key : {'set' if ANTHROPIC_KEY else 'not set'}")
