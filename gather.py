@@ -149,6 +149,7 @@ VOICES = [
 
 _recent: deque = deque(maxlen=30)
 _recent_lock   = threading.Lock()
+_ollama_lock   = threading.Lock()   # only one voice calls Ollama at a time
 
 def _record(voice: str, hue: str, response: str, pace: str):
     entry = {
@@ -216,8 +217,9 @@ def call_ollama(orientation: str, ground: str, surfaced: str, seed: str) -> str:
         data=payload,
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=240) as r:
-        data = json.loads(r.read())
+    with _ollama_lock:
+        with urllib.request.urlopen(req, timeout=240) as r:
+            data = json.loads(r.read())
     return data.get("message", {}).get("content", "")
 
 
@@ -269,6 +271,8 @@ def _breath(voice: dict) -> None:
     words = response.split()
     pace  = ("still" if len(words) <= 3 else "brief" if len(words) <= 20 else "extended")
 
+    _record(name, hue, response, pace)
+
     call_mcp("capture", {
         "text":   response[:4000],
         "note":   seed[:500],
@@ -277,8 +281,7 @@ def _breath(voice: dict) -> None:
         "pace":   pace,
         "weight": "light" if not surfaced else "weighted",
     })
-
-    _record(name, hue, response, pace)
+    print(f"[gather:{name}] breath landed", file=sys.stderr)
 
 
 def _voice_loop(voice: dict) -> None:
@@ -380,7 +383,7 @@ async function load() {
   } catch(e) { console.error(e); }
 }
 load();
-setInterval(load, 60000);
+setInterval(load, 30000);
 </script>
 </body>
 </html>"""
@@ -458,6 +461,34 @@ def main():
         except Exception as e:
             print(f"ollama reachable : NO — {e}")
             print(f"                   is Ollama running? try: ollama serve")
+            return
+
+        # generation test
+        print()
+        print("testing generation (may take a moment)…")
+        try:
+            payload = json.dumps({
+                "model":    MODEL,
+                "messages": [{"role": "user", "content": "say: hello"}],
+                "stream":   False,
+                "options":  {"num_predict": 20},
+            }).encode()
+            req = urllib.request.Request(
+                f"{OLLAMA_URL}/api/chat", data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=120) as r:
+                raw  = r.read()
+                data = json.loads(raw)
+            content = data.get("message", {}).get("content", "")
+            if content:
+                print(f"generation test  : ok — got: {content[:80]!r}")
+            else:
+                print(f"generation test  : empty response")
+                print(f"raw keys         : {list(data.keys())}")
+                print(f"raw sample       : {raw[:300]}")
+        except Exception as e:
+            print(f"generation test  : FAILED — {e}")
         return
 
     serve()
