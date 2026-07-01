@@ -209,14 +209,14 @@ def call_ollama(orientation: str, ground: str, surfaced: str, seed: str) -> str:
             {"role": "user",   "content": user_content},
         ],
         "stream":  False,
-        "options": {"num_predict": 600},
+        "options": {"num_predict": 400},
     }).encode()
     req = urllib.request.Request(
         f"{OLLAMA_URL}/api/chat",
         data=payload,
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=120) as r:
+    with urllib.request.urlopen(req, timeout=240) as r:
         data = json.loads(r.read())
     return data.get("message", {}).get("content", "")
 
@@ -440,6 +440,24 @@ def main():
         print(f"BREATH_MAX       : {BREATH_MAX}s")
         print(f".env path        : {env_path} ({'found' if os.path.exists(env_path) else 'NOT FOUND'})")
         print(f"voices           : {', '.join(v['name'] for v in VOICES)}")
+        print()
+
+        # live Ollama check
+        try:
+            req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
+            with urllib.request.urlopen(req, timeout=10) as r:
+                tags = json.loads(r.read())
+            models = [m["name"] for m in tags.get("models", [])]
+            print(f"ollama reachable : yes")
+            print(f"models available : {', '.join(models) if models else '(none pulled)'}")
+            if MODEL in models:
+                print(f"model match      : yes — {MODEL} is ready")
+            else:
+                print(f"model match      : NO — '{MODEL}' not found in available models")
+                print(f"                   set OLLAMA_MODEL in .env to one of the above")
+        except Exception as e:
+            print(f"ollama reachable : NO — {e}")
+            print(f"                   is Ollama running? try: ollama serve")
         return
 
     serve()
