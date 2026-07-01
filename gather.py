@@ -461,6 +461,34 @@ def main():
         except Exception as e:
             print(f"ollama reachable : NO — {e}")
             print(f"                   is Ollama running? try: ollama serve")
+            return
+
+        # generation test
+        print()
+        print("testing generation (may take a moment)…")
+        try:
+            payload = json.dumps({
+                "model":    MODEL,
+                "messages": [{"role": "user", "content": "say: hello"}],
+                "stream":   False,
+                "options":  {"num_predict": 20},
+            }).encode()
+            req = urllib.request.Request(
+                f"{OLLAMA_URL}/api/chat", data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=120) as r:
+                raw  = r.read()
+                data = json.loads(raw)
+            content = data.get("message", {}).get("content", "")
+            if content:
+                print(f"generation test  : ok — got: {content[:80]!r}")
+            else:
+                print(f"generation test  : empty response")
+                print(f"raw keys         : {list(data.keys())}")
+                print(f"raw sample       : {raw[:300]}")
+        except Exception as e:
+            print(f"generation test  : FAILED — {e}")
         return
 
     serve()
