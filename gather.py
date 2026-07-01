@@ -210,6 +210,7 @@ def call_ollama(orientation: str, ground: str, surfaced: str, seed: str) -> str:
             {"role": "user",   "content": user_content},
         ],
         "stream":  False,
+        "think":   False,
         "options": {"num_predict": 400},
     }).encode()
     req = urllib.request.Request(
@@ -471,6 +472,7 @@ def main():
                 "model":    MODEL,
                 "messages": [{"role": "user", "content": "say: hello"}],
                 "stream":   False,
+                "think":    False,
                 "options":  {"num_predict": 20},
             }).encode()
             req = urllib.request.Request(
