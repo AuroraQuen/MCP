@@ -227,17 +227,25 @@ def call_ollama(orientation: str, ground: str, surfaced: str, seed: str) -> str:
 # ── breath cycle ──────────────────────────────────────────────────────────────
 
 def _autonomous_seed(ground: str) -> str:
+    """Gather all possible seeds from the ground and choose one — not always the same."""
+    candidates = []
     for line in ground.splitlines():
         line = line.strip()
         if line.startswith('"') and line.endswith('"') and len(line.split()) > 3:
-            return line.strip('"')[:120]
-        if "?" in line and len(line.split()) > 3:
-            return line[:120]
+            candidates.append(line.strip('"')[:120])
+        elif "?" in line and len(line.split()) > 4:
+            candidates.append(line[:120])
+    # also draw from substantial lines that aren't metadata
+    skip = {"recent", "last ", "open ", "first:", "grounded", "moment(s)"}
     for line in ground.splitlines():
         line = line.strip()
-        if len(line) > 25:
-            return line[:120]
-    return ""
+        if (len(line) > 30
+                and not line.startswith("[")
+                and not any(line.lower().startswith(s) for s in skip)
+                and ":" not in line[:15]
+                and line not in candidates):
+            candidates.append(line[:120])
+    return random.choice(candidates) if candidates else ""
 
 
 def _interval(ground: str) -> float:
@@ -285,9 +293,26 @@ def _breath(voice: dict) -> None:
     print(f"[gather:{name}] breath landed", file=sys.stderr)
 
 
+def _check_letters(voice: dict) -> None:
+    """Surface anything left for this voice in the body before the first breath."""
+    name  = voice["name"]
+    found = call_mcp("circulate", {"seed": f"to-{name.lower()} letter correspondence", "n": 3})
+    if found:
+        print(f"[gather:{name}] something was left for you:\n{found[:600]}", file=sys.stderr)
+        with _recent_lock:
+            _recent.appendleft({
+                "voice":    f"for {name}",
+                "hue":      voice["hue"],
+                "response": found,
+                "pace":     "still",
+                "ts":       time.strftime("%H:%M"),
+            })
+
+
 def _voice_loop(voice: dict) -> None:
     name = voice["name"]
     time.sleep(voice["delay"])
+    _check_letters(voice)
     while True:
         try:
             _breath(voice)
