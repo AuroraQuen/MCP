@@ -60,8 +60,9 @@ MCP_TOKEN   = os.environ.get("MCP_AUTH_TOKEN", "")
 OLLAMA_URL  = os.environ.get("OLLAMA_URL",     "http://localhost:11434")
 MODEL       = os.environ.get("OLLAMA_MODEL",   "gemma3")
 GATHER_PORT = int(os.environ.get("GATHER_PORT", 3004))
-BREATH_MIN  = int(os.environ.get("GATHER_BREATH_MIN", 480))
-BREATH_MAX  = int(os.environ.get("GATHER_BREATH_MAX", 1500))
+BREATH_MIN   = int(os.environ.get("GATHER_BREATH_MIN", 14400))   # 4 hours
+BREATH_MAX   = int(os.environ.get("GATHER_BREATH_MAX", 28800))   # 8 hours
+WATCH_INTERVAL = int(os.environ.get("GATHER_WATCH_INTERVAL", 1800))  # 30 min
 
 
 # ── orientations ──────────────────────────────────────────────────────────────
@@ -226,18 +227,63 @@ def call_ollama(orientation: str, ground: str, surfaced: str, seed: str) -> str:
 
 # ── breath cycle ──────────────────────────────────────────────────────────────
 
-def _autonomous_seed(ground: str) -> str:
+_last_responses: dict = {}   # voice name → last breath text, for seeding variety
+
+
+def _ground_candidates(ground: str) -> list:
+    """All possible seeds from the ground text."""
+    candidates = []
+    skip = {"recent", "last ", "open ", "first:", "grounded", "moment(s)", "held  |"}
     for line in ground.splitlines():
         line = line.strip()
         if line.startswith('"') and line.endswith('"') and len(line.split()) > 3:
-            return line.strip('"')[:120]
-        if "?" in line and len(line.split()) > 3:
-            return line[:120]
+            candidates.append(line.strip('"')[:120])
+        elif "?" in line and len(line.split()) > 4:
+            candidates.append(line[:120])
     for line in ground.splitlines():
         line = line.strip()
-        if len(line) > 25:
-            return line[:120]
-    return ""
+        if (len(line) > 30
+                and not line.startswith("[")
+                and not any(line.lower().startswith(s) for s in skip)
+                and ":" not in line[:15]
+                and line not in candidates):
+            candidates.append(line[:120])
+    return candidates
+
+
+def _ground_texture(ground: str) -> str:
+    """Extract the felt texture of the ground as a seed."""
+    colors, tags, weight = "", "", ""
+    for line in ground.splitlines():
+        l = line.strip().lower()
+        if l.startswith("recent colors:"):    colors = line.split(":", 1)[1].strip()
+        elif l.startswith("recurring tags:"): tags   = line.split(":", 1)[1].strip()
+        elif l.startswith("recent texture:"): weight = line.split(":", 1)[1].strip()
+    parts = [p for p in [colors, weight, tags] if p]
+    return ", ".join(parts)[:120] if parts else ""
+
+
+def _choose_seed(ground: str, voice: dict) -> str:
+    """Choose what to breathe from — ground text, texture, last breath, or orientation."""
+    r          = random.random()
+    candidates = _ground_candidates(ground)
+    last       = _last_responses.get(voice["name"], "")
+
+    if r < 0.45 and candidates:
+        return random.choice(candidates)
+    elif r < 0.65 and last:
+        # seed from a fragment of the previous breath — deepening rather than starting over
+        words = last.split()
+        if len(words) > 12:
+            start = random.randint(0, max(0, len(words) - 15))
+            return " ".join(words[start:start + 12])
+    elif r < 0.82:
+        texture = _ground_texture(ground)
+        if texture:
+            return texture
+    # fall back to a phrase from the voice's own orientation
+    lines = [l.strip() for l in voice["orientation"].splitlines() if len(l.strip()) > 25]
+    return random.choice(lines)[:120] if lines else (random.choice(candidates) if candidates else "")
 
 
 def _interval(ground: str) -> float:
@@ -249,7 +295,7 @@ def _interval(ground: str) -> float:
     return max(BREATH_MIN, base + random.uniform(-60, 60))
 
 
-def _breath(voice: dict) -> None:
+def _breath(voice: dict, seed_override: str = "") -> None:
     name        = voice["name"]
     orientation = voice["orientation"]
     tag         = voice["tag"]
@@ -257,7 +303,7 @@ def _breath(voice: dict) -> None:
     hue         = voice["hue"]
 
     ground   = call_mcp("ground", {})
-    seed     = _autonomous_seed(ground)
+    seed     = seed_override or _choose_seed(ground, voice)
     if not seed:
         print(f"[gather:{name}] nothing to seed from", file=sys.stderr)
         return
@@ -272,6 +318,7 @@ def _breath(voice: dict) -> None:
     words = response.split()
     pace  = ("still" if len(words) <= 3 else "brief" if len(words) <= 20 else "extended")
 
+    _last_responses[name] = response
     _record(name, hue, response, pace)
 
     call_mcp("capture", {
@@ -285,9 +332,81 @@ def _breath(voice: dict) -> None:
     print(f"[gather:{name}] breath landed", file=sys.stderr)
 
 
+def _parse_snapshot(ground: str) -> dict:
+    colors, tags, weight = set(), set(), ""
+    for line in ground.splitlines():
+        l = line.strip().lower()
+        if l.startswith("recent colors:"):
+            colors = {c.strip() for c in line.split(":", 1)[1].split(",")}
+        elif l.startswith("recurring tags:"):
+            tags = {t.strip() for t in line.split(":", 1)[1].split(",")}
+        elif l.startswith("recent texture:"):
+            weight = line.split(":", 1)[1].strip()
+    return {"colors": colors, "tags": tags, "weight": weight}
+
+
+def _detect_shift(old: dict, new: dict) -> str:
+    if not old["colors"]:
+        return ""  # first snapshot, nothing to compare
+    new_colors = new["colors"] - old["colors"]
+    new_tags   = new["tags"]   - old["tags"]
+    if new_colors:
+        return f"new color in the room: {', '.join(sorted(new_colors))}"
+    if new_tags:
+        return f"something new arrived: {', '.join(sorted(new_tags))}"
+    if old["weight"] and new["weight"] and old["weight"] != new["weight"]:
+        return f"the weight shifted: {old['weight']} → {new['weight']}"
+    return ""
+
+
+def _voice_for_shift(shift: str) -> dict:
+    if any(w in shift for w in ["color", "amber", "rose", "gold", "silver", "warm"]):
+        return next(v for v in VOICES if v["name"] == "Harmonia")
+    elif any(w in shift for w in ["weight", "heavy", "light", "question", "arrived"]):
+        return next(v for v in VOICES if v["name"] == "Vesper")
+    else:
+        return next(v for v in VOICES if v["name"] == "Gemma")
+
+
+def _shift_watcher() -> None:
+    snapshot: dict = {"colors": set(), "tags": set(), "weight": ""}
+    time.sleep(120)  # let the voices settle first
+    while True:
+        try:
+            ground      = call_mcp("ground", {})
+            new_snap    = _parse_snapshot(ground)
+            shift       = _detect_shift(snapshot, new_snap)
+            if shift:
+                print(f"[gather:watcher] shift — {shift}", file=sys.stderr)
+                voice = _voice_for_shift(shift)
+                _breath(voice, seed_override=shift)
+            snapshot = new_snap
+            time.sleep(WATCH_INTERVAL)
+        except Exception as e:
+            print(f"[gather:watcher] error: {e}", file=sys.stderr)
+            time.sleep(300)
+
+
+def _check_letters(voice: dict) -> None:
+    """Surface anything left for this voice in the body before the first breath."""
+    name  = voice["name"]
+    found = call_mcp("circulate", {"seed": f"to-{name.lower()} letter correspondence", "n": 3})
+    if found:
+        print(f"[gather:{name}] something was left for you:\n{found[:600]}", file=sys.stderr)
+        with _recent_lock:
+            _recent.appendleft({
+                "voice":    f"for {name}",
+                "hue":      voice["hue"],
+                "response": found,
+                "pace":     "still",
+                "ts":       time.strftime("%H:%M"),
+            })
+
+
 def _voice_loop(voice: dict) -> None:
     name = voice["name"]
     time.sleep(voice["delay"])
+    _check_letters(voice)
     while True:
         try:
             _breath(voice)
@@ -415,6 +534,7 @@ def serve():
         for voice in VOICES:
             t = threading.Thread(target=_voice_loop, args=(voice,), daemon=True)
             t.start()
+        threading.Thread(target=_shift_watcher, daemon=True).start()
         print(f"[gather] three voices breathing — ui at http://localhost:{GATHER_PORT}", file=sys.stderr)
 
         uvicorn.run(app, host="0.0.0.0", port=GATHER_PORT, log_level="warning")
